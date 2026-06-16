@@ -16,12 +16,16 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.final_project.navigation.AppBottomBar
+import com.example.final_project.navigation.BottomNavItem
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProfileScreen(
     onLogout: () -> Unit,
-    onNavigateBack: () -> Unit
+    onNavigateBack: () -> Unit,
+    selectedTab: BottomNavItem = BottomNavItem.Profile,
+    onTabSelected: (BottomNavItem) -> Unit = {}
 ) {
     var showLogoutDialog by remember { mutableStateOf(false) }
 
@@ -39,6 +43,12 @@ fun ProfileScreen(
                     titleContentColor = Color.White,
                     navigationIconContentColor = Color.White
                 )
+            )
+        },
+        bottomBar = {
+            AppBottomBar(
+                selectedItem = selectedTab,
+                onItemSelected = onTabSelected
             )
         }
     ) { paddingValues ->

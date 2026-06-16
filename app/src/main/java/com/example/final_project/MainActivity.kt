@@ -21,6 +21,7 @@ import com.example.final_project.presentation.home.HomeScreen
 import com.example.final_project.presentation.profile.ProfileScreen
 import com.example.final_project.presentation.search.SearchScreen
 import com.example.final_project.ui.theme.Final_ProjectTheme
+import com.example.final_project.navigation.BottomNavItem
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -41,9 +42,24 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun AppNavigation() {
-    // Simple navigation state
     var currentScreen by remember { mutableStateOf("login") }
     var selectedDestinationId by remember { mutableStateOf("") }
+
+    fun navigateToTab(tab: BottomNavItem) {
+        currentScreen = when (tab) {
+            BottomNavItem.Home -> "home"
+            BottomNavItem.Explore -> "search"
+            BottomNavItem.Favorites -> "favorites"
+            BottomNavItem.Profile -> "profile"
+        }
+    }
+
+    fun selectedTabForScreen(): BottomNavItem = when (currentScreen) {
+        "search" -> BottomNavItem.Explore
+        "favorites" -> BottomNavItem.Favorites
+        "profile" -> BottomNavItem.Profile
+        else -> BottomNavItem.Home
+    }
 
     when (currentScreen) {
         "login" -> {
@@ -68,13 +84,10 @@ fun AppNavigation() {
                     selectedDestinationId = destinationId
                     currentScreen = "detail"
                 },
-                onSearchClick = {
-                    currentScreen = "search"
-                },
-                onFavoritesClick = {
-                    currentScreen = "favorites"
-                }
-
+                onSearchClick = { navigateToTab(BottomNavItem.Explore) },
+                onFavoritesClick = { navigateToTab(BottomNavItem.Favorites) },
+                selectedTab = selectedTabForScreen(),
+                onTabSelected = ::navigateToTab
             )
         }
 
@@ -93,9 +106,9 @@ fun AppNavigation() {
                     selectedDestinationId = destinationId
                     currentScreen = "detail"
                 },
-                onNavigateBack = {
-                    currentScreen = "home"
-                }
+                onNavigateBack = { navigateToTab(BottomNavItem.Home) },
+                selectedTab = selectedTabForScreen(),
+                onTabSelected = ::navigateToTab
             )
         }
 
@@ -105,9 +118,9 @@ fun AppNavigation() {
                     selectedDestinationId = destinationId
                     currentScreen = "detail"
                 },
-                onNavigateBack = {
-                    currentScreen = "home"
-                }
+                onNavigateBack = { navigateToTab(BottomNavItem.Home) },
+                selectedTab = selectedTabForScreen(),
+                onTabSelected = ::navigateToTab
             )
         }
 
@@ -116,9 +129,9 @@ fun AppNavigation() {
                 onLogout = {
                     currentScreen = "login"
                 },
-                onNavigateBack = {
-                    currentScreen = "home"
-                }
+                onNavigateBack = { navigateToTab(BottomNavItem.Home) },
+                selectedTab = selectedTabForScreen(),
+                onTabSelected = ::navigateToTab
             )
         }
 

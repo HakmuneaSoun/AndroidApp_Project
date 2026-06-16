@@ -53,6 +53,24 @@ fun rememberNavigationState(): NavigationState {
 
 @Composable
 fun AppNavigation(navState: NavigationState = rememberNavigationState()) {
+    fun navigateToTab(tab: BottomNavItem) {
+        navState.navigateTo(
+            when (tab) {
+                BottomNavItem.Home -> Screen.Home
+                BottomNavItem.Explore -> Screen.Search
+                BottomNavItem.Favorites -> Screen.Favorites
+                BottomNavItem.Profile -> Screen.Profile
+            }
+        )
+    }
+
+    fun selectedTabForScreen(): BottomNavItem = when (navState.currentScreen) {
+        Screen.Search -> BottomNavItem.Explore
+        Screen.Favorites -> BottomNavItem.Favorites
+        Screen.Profile -> BottomNavItem.Profile
+        else -> BottomNavItem.Home
+    }
+
     when (navState.currentScreen) {
         Screen.Login -> {
             LoginScreen(
@@ -85,8 +103,10 @@ fun AppNavigation(navState: NavigationState = rememberNavigationState()) {
                 onDestinationClick = { destinationId ->
                     navState.navigateTo(Screen.Detail, destinationId)
                 },
-                onSearchClick = { navState.navigateTo(Screen.Search) },
-                onFavoritesClick = { navState.navigateTo(Screen.Favorites) }
+                onSearchClick = { navigateToTab(BottomNavItem.Explore) },
+                onFavoritesClick = { navigateToTab(BottomNavItem.Favorites) },
+                selectedTab = selectedTabForScreen(),
+                onTabSelected = ::navigateToTab
             )
         }
 
@@ -102,7 +122,9 @@ fun AppNavigation(navState: NavigationState = rememberNavigationState()) {
                 onDestinationClick = { destinationId ->
                     navState.navigateTo(Screen.Detail, destinationId)
                 },
-                onNavigateBack = { navState.navigateBack() }
+                onNavigateBack = { navigateToTab(BottomNavItem.Home) },
+                selectedTab = selectedTabForScreen(),
+                onTabSelected = ::navigateToTab
             )
         }
 
@@ -111,14 +133,18 @@ fun AppNavigation(navState: NavigationState = rememberNavigationState()) {
                 onDestinationClick = { destinationId ->
                     navState.navigateTo(Screen.Detail, destinationId)
                 },
-                onNavigateBack = { navState.navigateBack() }
+                onNavigateBack = { navigateToTab(BottomNavItem.Home) },
+                selectedTab = selectedTabForScreen(),
+                onTabSelected = ::navigateToTab
             )
         }
 
         Screen.Profile -> {
             ProfileScreen(
                 onLogout = { navState.navigateTo(Screen.Login) },
-                onNavigateBack = { navState.navigateBack() }
+                onNavigateBack = { navigateToTab(BottomNavItem.Home) },
+                selectedTab = selectedTabForScreen(),
+                onTabSelected = ::navigateToTab
             )
         }
     }

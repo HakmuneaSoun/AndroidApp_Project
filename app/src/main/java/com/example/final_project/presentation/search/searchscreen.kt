@@ -22,12 +22,16 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.final_project.domain.model.Destination
 import com.example.final_project.domain.model.mockDestinations
+import com.example.final_project.navigation.AppBottomBar
+import com.example.final_project.navigation.BottomNavItem
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SearchScreen(
     onDestinationClick: (String) -> Unit,
-    onNavigateBack: () -> Unit
+    onNavigateBack: () -> Unit,
+    selectedTab: BottomNavItem = BottomNavItem.Explore,
+    onTabSelected: (BottomNavItem) -> Unit = {}
 ) {
     var searchQuery by remember { mutableStateOf("") }
     var selectedFilter by remember { mutableStateOf("All") }
@@ -73,6 +77,12 @@ fun SearchScreen(
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface
                 )
+            )
+        },
+        bottomBar = {
+            AppBottomBar(
+                selectedItem = selectedTab,
+                onItemSelected = onTabSelected
             )
         }
     ) { paddingValues ->

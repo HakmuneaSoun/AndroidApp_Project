@@ -26,13 +26,17 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.final_project.domain.model.Destination
 import com.example.final_project.domain.model.mockDestinations
+import com.example.final_project.navigation.AppBottomBar
+import com.example.final_project.navigation.BottomNavItem
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     onDestinationClick: (String) -> Unit,
     onSearchClick: () -> Unit,
-    onFavoritesClick: () -> Unit
+    onFavoritesClick: () -> Unit,
+    selectedTab: BottomNavItem = BottomNavItem.Home,
+    onTabSelected: (BottomNavItem) -> Unit = {}
 ) {
     var searchQuery by remember { mutableStateOf("") }
     var selectedCategory by remember { mutableStateOf<String?>(null) }
@@ -72,30 +76,10 @@ fun HomeScreen(
             )
         },
         bottomBar = {
-            NavigationBar(
-                containerColor = MaterialTheme.colorScheme.surface,
-                tonalElevation = 8.dp
-            ) {
-                listOf("Home", "Explore", "Favorites", "Profile").forEachIndexed { index, item ->
-                    val selected = item == "Home"
-                    NavigationBarItem(
-                        selected = selected,
-                        onClick = { /* Handle navigation */ },
-                        icon = {
-                            Icon(
-                                when (item) {
-                                    "Home" -> if (selected) Icons.Default.Home else Icons.Default.Home
-                                    "Explore" -> if (selected) Icons.Default.Explore else Icons.Default.ExploreOff
-                                    "Favorites" -> if (selected) Icons.Default.Favorite else Icons.Default.FavoriteBorder
-                                    else -> if (selected) Icons.Default.Person else Icons.Default.PersonOutline
-                                },
-                                contentDescription = item
-                            )
-                        },
-                        label = { Text(item) }
-                    )
-                }
-            }
+            AppBottomBar(
+                selectedItem = selectedTab,
+                onItemSelected = onTabSelected
+            )
         }
     ) { paddingValues ->
         LazyColumn(

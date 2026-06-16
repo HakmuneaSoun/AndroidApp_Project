@@ -20,12 +20,16 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.final_project.domain.model.Destination
 import com.example.final_project.domain.model.mockDestinations
+import com.example.final_project.navigation.AppBottomBar
+import com.example.final_project.navigation.BottomNavItem
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FavoriteScreen(
     onDestinationClick: (String) -> Unit,
-    onNavigateBack: () -> Unit
+    onNavigateBack: () -> Unit,
+    selectedTab: BottomNavItem = BottomNavItem.Favorites,
+    onTabSelected: (BottomNavItem) -> Unit = {}
 ) {
     // Mock favorite destinations (first 3 destinations are favorited)
     var favorites by remember { mutableStateOf(mockDestinations.take(3)) }
@@ -45,6 +49,12 @@ fun FavoriteScreen(
                     navigationIconContentColor = Color.White,
                     actionIconContentColor = Color.White
                 )
+            )
+        },
+        bottomBar = {
+            AppBottomBar(
+                selectedItem = selectedTab,
+                onItemSelected = onTabSelected
             )
         }
     ) { paddingValues ->
