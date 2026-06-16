@@ -23,19 +23,40 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.final_project.domain.auth.StaticAuth
+import com.example.final_project.domain.auth.UserRole
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LoginScreen(
     onNavigateToRegister: () -> Unit,
     onNavigateToForgotPassword: () -> Unit,
-    onLoginSuccess: () -> Unit
+    onLoginSuccess: (UserRole) -> Unit
 ) {
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
     var rememberMe by remember { mutableStateOf(false) }
     var isLoading by remember { mutableStateOf(false) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+
+    fun handleLogin() {
+        errorMessage = null
+        if (email.isBlank() || password.isBlank()) {
+            errorMessage = "Please enter email and password"
+            return
+        }
+
+        val role = StaticAuth.authenticate(email, password)
+        if (role == null) {
+            errorMessage = "Invalid email or password"
+            return
+        }
+
+        isLoading = true
+        onLoginSuccess(role)
+        isLoading = false
+    }
 
     Scaffold(
         modifier = Modifier.fillMaxSize()
@@ -171,9 +192,18 @@ fun LoginScreen(
 
                 Spacer(modifier = Modifier.height(32.dp))
 
+                if (errorMessage != null) {
+                    Text(
+                        text = errorMessage!!,
+                        color = Color(0xFFFFCDD2),
+                        fontSize = 13.sp,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                }
+
                 // Login Button
                 Button(
-                    onClick = { onLoginSuccess() },
+                    onClick = { handleLogin() },
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(52.dp),
@@ -214,7 +244,37 @@ fun LoginScreen(
                     Text("Continue with Google", fontSize = 14.sp)
                 }
 
-                Spacer(modifier = Modifier.height(48.dp))
+                Spacer(modifier = Modifier.height(24.dp))
+
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = Color.White.copy(alpha = 0.15f)
+                    )
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Text(
+                            text = "Demo accounts",
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "User: ${StaticAuth.USER_EMAIL} / ${StaticAuth.USER_PASSWORD}",
+                            color = Color.White.copy(alpha = 0.85f),
+                            fontSize = 12.sp
+                        )
+                        Text(
+                            text = "Admin: ${StaticAuth.ADMIN_EMAIL} / ${StaticAuth.ADMIN_PASSWORD}",
+                            color = Color.White.copy(alpha = 0.85f),
+                            fontSize = 12.sp
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(24.dp))
 
                 // Register Link
                 Row {

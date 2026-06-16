@@ -11,6 +11,8 @@ import com.example.final_project.presentation.favorite.FavoriteScreen
 import com.example.final_project.presentation.home.HomeScreen
 import com.example.final_project.presentation.profile.ProfileScreen
 import com.example.final_project.presentation.search.SearchScreen
+import com.example.final_project.presentation.admin.AdminDashboardScreen
+import com.example.final_project.domain.auth.UserRole
 
 sealed class Screen(val route: String) {
     object Login : Screen("login")
@@ -21,6 +23,7 @@ sealed class Screen(val route: String) {
     object Search : Screen("search")
     object Favorites : Screen("favorites")
     object Profile : Screen("profile")
+    object Admin : Screen("admin")
 }
 
 class NavigationState {
@@ -71,30 +74,37 @@ fun AppNavigation(navState: NavigationState = rememberNavigationState()) {
         else -> BottomNavItem.Home
     }
 
+    fun handleLoginSuccess(role: UserRole) {
+        navState.navigateTo(
+            when (role) {
+                UserRole.ADMIN -> Screen.Admin
+                UserRole.USER -> Screen.Home
+            }
+        )
+    }
+
     when (navState.currentScreen) {
         Screen.Login -> {
             LoginScreen(
                 onNavigateToRegister = { navState.navigateTo(Screen.Register) },
                 onNavigateToForgotPassword = { navState.navigateTo(Screen.ForgotPassword) },
-                onLoginSuccess = { navState.navigateTo(Screen.Home) }
+                onLoginSuccess = ::handleLoginSuccess
             )
         }
 
         Screen.Register -> {
-            // You can implement RegisterScreen similarly
             LoginScreen(
                 onNavigateToRegister = {},
                 onNavigateToForgotPassword = {},
-                onLoginSuccess = { navState.navigateTo(Screen.Home) }
+                onLoginSuccess = ::handleLoginSuccess
             )
         }
 
         Screen.ForgotPassword -> {
-            // You can implement ForgotPasswordScreen similarly
             LoginScreen(
                 onNavigateToRegister = {},
                 onNavigateToForgotPassword = {},
-                onLoginSuccess = {}
+                onLoginSuccess = ::handleLoginSuccess
             )
         }
 
@@ -145,6 +155,12 @@ fun AppNavigation(navState: NavigationState = rememberNavigationState()) {
                 onNavigateBack = { navigateToTab(BottomNavItem.Home) },
                 selectedTab = selectedTabForScreen(),
                 onTabSelected = ::navigateToTab
+            )
+        }
+
+        Screen.Admin -> {
+            AdminDashboardScreen(
+                onNavigateBack = { navState.navigateTo(Screen.Login) }
             )
         }
     }

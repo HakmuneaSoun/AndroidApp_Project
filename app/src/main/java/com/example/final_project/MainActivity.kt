@@ -14,6 +14,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
+import com.example.final_project.presentation.admin.AdminDashboardScreen
 import com.example.final_project.presentation.auth.login.LoginScreen
 import com.example.final_project.presentation.detail.DetailScreen
 import com.example.final_project.presentation.favorite.FavoriteScreen
@@ -22,6 +23,7 @@ import com.example.final_project.presentation.profile.ProfileScreen
 import com.example.final_project.presentation.search.SearchScreen
 import com.example.final_project.ui.theme.Final_ProjectTheme
 import com.example.final_project.navigation.BottomNavItem
+import com.example.final_project.domain.auth.UserRole
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -61,20 +63,23 @@ fun AppNavigation() {
         else -> BottomNavItem.Home
     }
 
+    fun handleLoginSuccess(role: UserRole) {
+        currentScreen = when (role) {
+            UserRole.ADMIN -> "admin"
+            UserRole.USER -> "home"
+        }
+    }
+
     when (currentScreen) {
         "login" -> {
             LoginScreen(
                 onNavigateToRegister = {
-                    // Navigate to register (you can add register screen similarly)
                     currentScreen = "register"
                 },
                 onNavigateToForgotPassword = {
-                    // Navigate to forgot password
                     currentScreen = "forgot_password"
                 },
-                onLoginSuccess = {
-                    currentScreen = "home"
-                }
+                onLoginSuccess = ::handleLoginSuccess
             )
         }
 
@@ -135,12 +140,19 @@ fun AppNavigation() {
             )
         }
 
+        "admin" -> {
+            AdminDashboardScreen(
+                onNavigateBack = {
+                    currentScreen = "login"
+                }
+            )
+        }
+
         else -> {
-            // Default to login screen
             LoginScreen(
                 onNavigateToRegister = { currentScreen = "register" },
                 onNavigateToForgotPassword = { currentScreen = "forgot_password" },
-                onLoginSuccess = { currentScreen = "home" }
+                onLoginSuccess = ::handleLoginSuccess
             )
         }
     }
@@ -153,7 +165,7 @@ fun LoginScreenPreview() {
         LoginScreen(
             onNavigateToRegister = {},
             onNavigateToForgotPassword = {},
-            onLoginSuccess = {}
+            onLoginSuccess = { _ -> }
         )
     }
 }
