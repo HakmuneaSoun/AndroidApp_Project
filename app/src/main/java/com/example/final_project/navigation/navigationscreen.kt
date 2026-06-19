@@ -7,6 +7,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import com.example.final_project.presentation.admin.AdminDashboardScreen
 import com.example.final_project.presentation.auth.login.LoginScreen
+import com.example.final_project.presentation.auth.register.RegisterScreen
 import com.example.final_project.presentation.detail.DetailScreen
 import com.example.final_project.presentation.favorite.FavoriteScreen
 import com.example.final_project.presentation.home.HomeScreen
@@ -98,12 +99,9 @@ fun AppNavigation(navState: NavigationState = rememberNavigationState()) {
         }
 
         Screen.Register -> {
-            // You can implement RegisterScreen similarly
-            LoginScreen(
-                onNavigateToRegister = {},
-                onNavigateToForgotPassword = {},
-                onLoginSuccess = { navState.navigateTo(Screen.Home) },
-                onAdminLoginSuccess = { navState.navigateTo(Screen.Home) }
+            RegisterScreen(
+                onNavigateToLogin = { navState.navigateTo(Screen.Login) },
+                onRegisterSuccess = { navState.navigateTo(Screen.Home) }
             )
         }
 
