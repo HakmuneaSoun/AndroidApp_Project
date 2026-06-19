@@ -5,14 +5,17 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import com.example.final_project.presentation.admin.AdminDashboardScreen
 import com.example.final_project.presentation.auth.login.LoginScreen
 import com.example.final_project.presentation.detail.DetailScreen
 import com.example.final_project.presentation.favorite.FavoriteScreen
 import com.example.final_project.presentation.home.HomeScreen
 import com.example.final_project.presentation.profile.ProfileScreen
 import com.example.final_project.presentation.search.SearchScreen
+import com.example.final_project.presentation.splash.SplashScreen
 
 sealed class Screen(val route: String) {
+    object Splash : Screen("splash")
     object Login : Screen("login")
     object Register : Screen("register")
     object ForgotPassword : Screen("forgot_password")
@@ -21,10 +24,11 @@ sealed class Screen(val route: String) {
     object Search : Screen("search")
     object Favorites : Screen("favorites")
     object Profile : Screen("profile")
+    object AdminDashboard : Screen("admin_dashboard")
 }
 
 class NavigationState {
-    var currentScreen by mutableStateOf<Screen>(Screen.Login)
+    var currentScreen by mutableStateOf<Screen>(Screen.Splash)
         private set
     var selectedDestinationId by mutableStateOf("")
         private set
@@ -53,12 +57,43 @@ fun rememberNavigationState(): NavigationState {
 
 @Composable
 fun AppNavigation(navState: NavigationState = rememberNavigationState()) {
+    fun navigateToTab(tab: BottomNavItem) {
+        navState.navigateTo(
+            when (tab) {
+                BottomNavItem.Home -> Screen.Home
+                BottomNavItem.Explore -> Screen.Search
+                BottomNavItem.Favorites -> Screen.Favorites
+                BottomNavItem.Profile -> Screen.Profile
+            }
+        )
+    }
+
+    fun selectedTabForScreen(): BottomNavItem = when (navState.currentScreen) {
+        Screen.Search -> BottomNavItem.Explore
+        Screen.Favorites -> BottomNavItem.Favorites
+        Screen.Profile -> BottomNavItem.Profile
+        else -> BottomNavItem.Home
+    }
+
     when (navState.currentScreen) {
+        Screen.Splash -> {
+            SplashScreen(
+                onTimeout = { navState.navigateTo(Screen.Login) }
+            )
+        }
+
         Screen.Login -> {
             LoginScreen(
                 onNavigateToRegister = { navState.navigateTo(Screen.Register) },
                 onNavigateToForgotPassword = { navState.navigateTo(Screen.ForgotPassword) },
-                onLoginSuccess = { navState.navigateTo(Screen.Home) }
+                onLoginSuccess = { navState.navigateTo(Screen.Home) },
+                onAdminLoginSuccess = { navState.navigateTo(Screen.AdminDashboard) }
+            )
+        }
+
+        Screen.AdminDashboard -> {
+            AdminDashboardScreen(
+                onNavigateBack = { navState.navigateTo(Screen.Login) }
             )
         }
 
@@ -67,7 +102,8 @@ fun AppNavigation(navState: NavigationState = rememberNavigationState()) {
             LoginScreen(
                 onNavigateToRegister = {},
                 onNavigateToForgotPassword = {},
-                onLoginSuccess = { navState.navigateTo(Screen.Home) }
+                onLoginSuccess = { navState.navigateTo(Screen.Home) },
+                onAdminLoginSuccess = { navState.navigateTo(Screen.Home) }
             )
         }
 
@@ -76,7 +112,8 @@ fun AppNavigation(navState: NavigationState = rememberNavigationState()) {
             LoginScreen(
                 onNavigateToRegister = {},
                 onNavigateToForgotPassword = {},
-                onLoginSuccess = {}
+                onLoginSuccess = {},
+                onAdminLoginSuccess = {}
             )
         }
 
@@ -85,24 +122,34 @@ fun AppNavigation(navState: NavigationState = rememberNavigationState()) {
                 onDestinationClick = { destinationId ->
                     navState.navigateTo(Screen.Detail, destinationId)
                 },
-                onSearchClick = { navState.navigateTo(Screen.Search) },
-                onFavoritesClick = { navState.navigateTo(Screen.Favorites) }
+                onSearchClick = { navigateToTab(BottomNavItem.Explore) },
+                onFavoritesClick = { navigateToTab(BottomNavItem.Favorites) },
+                selectedTab = selectedTabForScreen(),
+                onTabSelected = ::navigateToTab
             )
         }
 
         Screen.Detail -> {
             DetailScreen(
                 destinationId = navState.selectedDestinationId.ifEmpty { "1" },
-                onNavigateBack = { navState.navigateBack() }
+                onNavigateBack = { navState.navigateBack() },
+                onNavigateToDestination = { destinationId ->
+                    navState.navigateTo(Screen.Detail, destinationId)
+                },
+                selectedTab = selectedTabForScreen(),
+                onTabSelected = ::navigateToTab
             )
         }
+
 
         Screen.Search -> {
             SearchScreen(
                 onDestinationClick = { destinationId ->
                     navState.navigateTo(Screen.Detail, destinationId)
                 },
-                onNavigateBack = { navState.navigateBack() }
+                onNavigateBack = { navigateToTab(BottomNavItem.Home) },
+                selectedTab = selectedTabForScreen(),
+                onTabSelected = ::navigateToTab
             )
         }
 
@@ -111,16 +158,19 @@ fun AppNavigation(navState: NavigationState = rememberNavigationState()) {
                 onDestinationClick = { destinationId ->
                     navState.navigateTo(Screen.Detail, destinationId)
                 },
-                onNavigateBack = { navState.navigateBack() }
+                onNavigateBack = { navigateToTab(BottomNavItem.Home) },
+                selectedTab = selectedTabForScreen(),
+                onTabSelected = ::navigateToTab
             )
         }
 
         Screen.Profile -> {
             ProfileScreen(
                 onLogout = { navState.navigateTo(Screen.Login) },
-                onNavigateBack = { navState.navigateBack() }
+                onNavigateBack = { navigateToTab(BottomNavItem.Home) },
+                selectedTab = selectedTabForScreen(),
+                onTabSelected = ::navigateToTab
             )
         }
     }
 }
-
