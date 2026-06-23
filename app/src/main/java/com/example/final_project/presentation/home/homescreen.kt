@@ -31,9 +31,9 @@ import coil.compose.AsyncImage
 import androidx.compose.foundation.Image
 import androidx.compose.ui.res.painterResource
 import com.example.final_project.domain.model.Destination
-import com.example.final_project.domain.model.mockDestinations
 import com.example.final_project.navigation.AppBottomBar
 import com.example.final_project.navigation.BottomNavItem
+import com.example.final_project.presentation.common.DestinationImage
 import com.example.final_project.presentation.notifications.NotificationBellIcon
 import kotlinx.coroutines.delay
 
@@ -44,6 +44,8 @@ private val ScreenBackground = Color(0xFFFAFAFC)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
+    destinations: List<Destination> = emptyList(),
+    isLoading: Boolean = false,
     onDestinationClick: (String) -> Unit,
     onSearchClick: () -> Unit,
     onFavoritesClick: () -> Unit,
@@ -55,7 +57,8 @@ fun HomeScreen(
     var selectedCategory by remember { mutableStateOf<String?>(null) }
 
     val categories = listOf("All", "Temples", "Beaches", "Historical", "Nature", "Adventure")
-    val heroDestinations = remember { mockDestinations.sortedByDescending { it.rating }.take(5) }
+    val heroDestinations = remember(destinations) { destinations.sortedByDescending { it.rating }.take(5) }
+    val activeDestinations = destinations.filter { it.isActive }
 
     val greeting = remember {
         val hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
@@ -153,7 +156,7 @@ fun HomeScreen(
                     horizontalArrangement = Arrangement.spacedBy(16.dp),
                     contentPadding = PaddingValues(horizontal = 16.dp)
                 ) {
-                    items(mockDestinations.take(5)) { destination ->
+                    items(activeDestinations.take(5)) { destination ->
                         FeaturedDestinationCard(
                             destination = destination,
                             onClick = { onDestinationClick(destination.id) }
@@ -169,7 +172,7 @@ fun HomeScreen(
                     horizontalArrangement = Arrangement.spacedBy(16.dp),
                     contentPadding = PaddingValues(horizontal = 16.dp)
                 ) {
-                    items(mockDestinations.filter { it.rating >= 4.7 }) { destination ->
+                    items(activeDestinations.filter { it.rating >= 4.7 }) { destination ->
                         DestinationCard(
                             destination = destination,
                             onClick = { onDestinationClick(destination.id) }
@@ -182,7 +185,7 @@ fun HomeScreen(
             item {
                 SectionHeader(title = "Popular Destinations", showSeeAll = false)
                 Column(modifier = Modifier.padding(horizontal = 16.dp)) {
-                    mockDestinations.sortedByDescending { it.rating }.take(3).forEach { destination ->
+                    activeDestinations.sortedByDescending { it.rating }.take(3).forEach { destination ->
                         PopularDestinationItem(
                             destination = destination,
                             onClick = { onDestinationClick(destination.id) }
@@ -250,8 +253,8 @@ fun HeroSection(
                             .fillMaxSize()
                             .clickable { onDestinationClick(destination.id) }
                     ) {
-                        Image(
-                            painter = painterResource(id = destination.imageRes),
+                        DestinationImage(
+                            destination = destination,
                             contentDescription = destination.name,
                             modifier = Modifier.fillMaxSize(),
                             contentScale = ContentScale.Crop
@@ -551,8 +554,8 @@ fun FeaturedDestinationCard(destination: Destination, onClick: () -> Unit) {
         )
     ) {
         Box {
-            Image(
-                painter = painterResource(id = destination.imageRes),
+            DestinationImage(
+                destination = destination,
                 contentDescription = destination.name,
                 modifier = Modifier
                     .fillMaxWidth()
@@ -664,8 +667,8 @@ fun DestinationCard(destination: Destination, onClick: () -> Unit) {
         )
     ) {
         Column {
-            Image(
-                painter = painterResource(id = destination.imageRes),
+            DestinationImage(
+                destination = destination,
                 contentDescription = destination.name,
                 modifier = Modifier
                     .fillMaxWidth()
@@ -736,8 +739,8 @@ fun PopularDestinationItem(destination: Destination, onClick: () -> Unit) {
                     .size(60.dp)
                     .clip(RoundedCornerShape(10.dp))
             ) {
-                Image(
-                    painter = painterResource(id = destination.imageRes),
+                DestinationImage(
+                    destination = destination,
                     contentDescription = destination.name,
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop

@@ -1,7 +1,6 @@
 package com.example.final_project.presentation.admin
 
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -22,41 +21,34 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import coil.compose.AsyncImage
 import com.example.final_project.R
-import com.example.final_project.domain.model.AdminBooking
-import com.example.final_project.domain.model.Destination
-import com.example.final_project.domain.model.mockAdminBookings
+import com.example.final_project.data.remote.ApiConstants
+import com.example.final_project.data.remote.dto.BookingChartPoint
+import com.example.final_project.data.remote.dto.DashboardRecentBookingData
+import kotlin.math.ceil
 
 private val StatBlue = Color(0xFF2196F3)
 private val StatPurple = Color(0xFF5E35B1)
 private val StatGreen = Color(0xFF16A34A)
 
-private val chartFilters = listOf("This Month", "This Week", "This Year")
-
-private val monthlyChartData = listOf(42f, 58f, 48f, 72f, 65f, 88f)
-private val weeklyChartData = listOf(12f, 18f, 15f, 22f, 20f, 25f)
-private val yearlyChartData = listOf(320f, 410f, 380f, 460f, 520f, 542f)
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AdminDashboardContent(
-    destinations: List<Destination>,
-    bookings: List<AdminBooking> = mockAdminBookings,
-    onViewAllBookings: () -> Unit
+    onViewAllBookings: () -> Unit,
+    viewModel: AdminDashboardViewModel = viewModel(
+        factory = AdminDashboardViewModelFactory(
+            LocalContext.current.applicationContext as android.app.Application
+        )
+    )
 ) {
-    var selectedChartFilter by remember { mutableStateOf(chartFilters.first()) }
-
-    val chartData = when (selectedChartFilter) {
-        "This Week" -> weeklyChartData
-        "This Year" -> yearlyChartData
-        else -> monthlyChartData
-    }
-
-    val totalRevenue = 24_680.0
+    val state = viewModel.uiState
 
     LazyColumn(
         modifier = Modifier
@@ -65,29 +57,67 @@ fun AdminDashboardContent(
         contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(20.dp)
     ) {
-        item {
-            DashboardStatsGrid(
-                totalUsers = 1_248,
-                totalTours = destinations.size,
-                totalBookings = 542,
-                totalRevenue = totalRevenue
-            )
-        }
+        if (state.isLoading && state.stats == null) {
+            item {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(200.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(color = StatPurple)
+                }
+            }
+        } else {
+            state.errorMessage?.let { message ->
+                item {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFFFFEBEE)),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(text = message, color = Color(0xFFC62828), modifier = Modifier.weight(1f))
+                            TextButton(onClick = { viewModel.loadDashboard() }) {
+                                Text("Retry", color = StatPurple)
+                            }
+                        }
+                    }
+                }
+            }
 
-        item {
-            BookingsOverviewCard(
-                selectedFilter = selectedChartFilter,
-                onFilterChange = { selectedChartFilter = it },
-                chartData = chartData
-            )
-        }
+            state.stats?.let { stats ->
+                item {
+                    DashboardStatsGrid(
+                        totalUsers = stats.totalUsers,
+                        totalTours = stats.totalTours,
+                        totalBookings = stats.totalBookings,
+                        totalRevenue = stats.totalRevenue
+                    )
+                }
+            }
 
-        item {
-            RecentBookingsSection(
-                bookings = bookings.take(4),
-                destinations = destinations,
-                onViewAll = onViewAllBookings
-            )
+            item {
+                BookingsOverviewCard(
+                    selectedPeriod = state.selectedPeriod,
+                    onPeriodChange = viewModel::changePeriod,
+                    chartData = state.chartData,
+                    isLoading = state.isLoading
+                )
+            }
+
+            item {
+                RecentBookingsSection(
+                    bookings = state.recentBookings,
+                    onViewAll = onViewAllBookings
+                )
+            }
         }
 
         item { Spacer(modifier = Modifier.height(8.dp)) }
@@ -176,9 +206,10 @@ private fun DashboardStatCard(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun BookingsOverviewCard(
-    selectedFilter: String,
-    onFilterChange: (String) -> Unit,
-    chartData: List<Float>
+    selectedPeriod: DashboardPeriod,
+    onPeriodChange: (DashboardPeriod) -> Unit,
+    chartData: List<BookingChartPoint>,
+    isLoading: Boolean
 ) {
     var filterExpanded by remember { mutableStateOf(false) }
 
@@ -217,7 +248,7 @@ private fun BookingsOverviewCard(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = selectedFilter,
+                                text = selectedPeriod.label,
                                 fontSize = 13.sp,
                                 color = AdminTheme.TextSecondary
                             )
@@ -233,11 +264,11 @@ private fun BookingsOverviewCard(
                         expanded = filterExpanded,
                         onDismissRequest = { filterExpanded = false }
                     ) {
-                        chartFilters.forEach { filter ->
+                        DashboardPeriod.entries.forEach { period ->
                             DropdownMenuItem(
-                                text = { Text(filter) },
+                                text = { Text(period.label) },
                                 onClick = {
-                                    onFilterChange(filter)
+                                    onPeriodChange(period)
                                     filterExpanded = false
                                 }
                             )
@@ -248,26 +279,54 @@ private fun BookingsOverviewCard(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            BookingsLineChart(
-                data = chartData,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(180.dp)
-            )
+            if (isLoading && chartData.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(180.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(32.dp),
+                        color = StatPurple,
+                        strokeWidth = 2.dp
+                    )
+                }
+            } else {
+                BookingsLineChart(
+                    chartData = chartData,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(180.dp)
+                )
+            }
         }
     }
 }
 
 @Composable
 private fun BookingsLineChart(
-    data: List<Float>,
+    chartData: List<BookingChartPoint>,
     modifier: Modifier = Modifier
 ) {
     val lineColor = StatPurple
     val gridColor = Color(0xFFE5E7EB)
     val labelColor = AdminTheme.TextSecondary
-    val xLabels = listOf("1st", "2nd", "3rd", "4th", "5th", "6th")
-    val yMax = 100f
+
+    val data = chartData.map { it.bookingCount.toFloat() }
+    val maxCount = data.maxOrNull() ?: 0f
+    val yMax = when {
+        maxCount <= 0f -> 4f
+        maxCount <= 4f -> 4f
+        else -> ceil(maxCount / 4f) * 4f
+    }
+    val ySteps = listOf(0f, yMax * 0.25f, yMax * 0.5f, yMax * 0.75f, yMax)
+    val yLabels = ySteps.map { label ->
+        if (label == label.toLong().toFloat()) label.toLong().toString()
+        else String.format("%.1f", label)
+    }.reversed()
+
+    val xLabels = buildChartXLabels(chartData)
 
     Column(modifier = modifier) {
         Box(
@@ -283,7 +342,6 @@ private fun BookingsLineChart(
                 val chartWidth = chartRight - chartLeft
                 val chartHeight = chartBottom - chartTop
 
-                val ySteps = listOf(0f, 25f, 50f, 75f, 100f)
                 ySteps.forEach { step ->
                     val y = chartBottom - (step / yMax) * chartHeight
                     drawLine(
@@ -335,6 +393,11 @@ private fun BookingsLineChart(
                         drawCircle(color = AdminTheme.Surface, radius = 6f, center = point)
                         drawCircle(color = lineColor, radius = 4f, center = point)
                     }
+                } else if (data.size == 1) {
+                    val x = chartLeft + chartWidth / 2f
+                    val y = chartBottom - (data.first().coerceIn(0f, yMax) / yMax) * chartHeight
+                    drawCircle(color = AdminTheme.Surface, radius = 6f, center = Offset(x, y))
+                    drawCircle(color = lineColor, radius = 4f, center = Offset(x, y))
                 }
             }
 
@@ -344,7 +407,7 @@ private fun BookingsLineChart(
                     .padding(bottom = 4.dp),
                 verticalArrangement = Arrangement.SpaceBetween
             ) {
-                listOf("100", "75", "50", "25", "0").forEach { label ->
+                yLabels.forEach { label ->
                     Text(
                         text = label,
                         fontSize = 10.sp,
@@ -370,10 +433,23 @@ private fun BookingsLineChart(
     }
 }
 
+private fun buildChartXLabels(chartData: List<BookingChartPoint>): List<String> {
+    if (chartData.isEmpty()) return emptyList()
+    if (chartData.size <= 6) {
+        return chartData.map { formatChartDateLabel(it.date) }
+    }
+    val indices = listOf(0, chartData.size / 5, 2 * chartData.size / 5, 3 * chartData.size / 5, 4 * chartData.size / 5, chartData.lastIndex)
+    return indices.distinct().map { formatChartDateLabel(chartData[it].date) }
+}
+
+private fun formatChartDateLabel(date: String): String {
+    val day = date.substringAfterLast('-', date)
+    return day.trimStart('0').ifEmpty { day }
+}
+
 @Composable
 private fun RecentBookingsSection(
-    bookings: List<AdminBooking>,
-    destinations: List<Destination>,
+    bookings: List<DashboardRecentBookingData>,
     onViewAll: () -> Unit
 ) {
     Column {
@@ -399,22 +475,33 @@ private fun RecentBookingsSection(
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            bookings.forEach { booking ->
-                RecentBookingCard(
-                    booking = booking,
-                    imageRes = imageResForTour(booking.tourName, destinations)
-                )
+        if (bookings.isEmpty()) {
+            Text(
+                text = "No recent bookings",
+                fontSize = 14.sp,
+                color = AdminTheme.TextSecondary
+            )
+        } else {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                bookings.forEach { booking ->
+                    RecentBookingCard(booking = booking)
+                }
             }
         }
     }
 }
 
 @Composable
-private fun RecentBookingCard(
-    booking: AdminBooking,
-    imageRes: Int
-) {
+private fun RecentBookingCard(booking: DashboardRecentBookingData) {
+    val imageUrl = ApiConstants.resolveMediaUrl(booking.tourImage)
+    val statusColor = when (booking.status.uppercase()) {
+        "CONFIRMED" -> Color(0xFF2196F3)
+        "PENDING" -> Color(0xFFFF9800)
+        "COMPLETED" -> StatGreen
+        "CANCELLED" -> Color(0xFFE53935)
+        else -> AdminTheme.TextSecondary
+    }
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
@@ -427,45 +514,58 @@ private fun RecentBookingCard(
                 .padding(14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Image(
-                painter = painterResource(id = imageRes),
-                contentDescription = booking.tourName,
-                modifier = Modifier
-                    .size(52.dp)
-                    .clip(CircleShape),
-                contentScale = ContentScale.Crop
-            )
+            if (!imageUrl.isNullOrBlank()) {
+                AsyncImage(
+                    model = imageUrl,
+                    contentDescription = booking.tourTitle,
+                    modifier = Modifier
+                        .size(52.dp)
+                        .clip(CircleShape),
+                    contentScale = ContentScale.Crop,
+                    placeholder = painterResource(R.drawable.angkorwat),
+                    error = painterResource(R.drawable.angkorwat)
+                )
+            } else {
+                androidx.compose.foundation.Image(
+                    painter = painterResource(R.drawable.angkorwat),
+                    contentDescription = booking.tourTitle,
+                    modifier = Modifier
+                        .size(52.dp)
+                        .clip(CircleShape),
+                    contentScale = ContentScale.Crop
+                )
+            }
 
             Spacer(modifier = Modifier.width(14.dp))
 
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = booking.tourName,
+                    text = booking.tourTitle,
                     fontSize = 15.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = AdminTheme.TextPrimary
                 )
                 Text(
-                    text = "${booking.date} • ${booking.people} People",
+                    text = "${booking.tourDate} • ${booking.peopleCount} People",
                     fontSize = 13.sp,
                     color = AdminTheme.TextSecondary,
                     modifier = Modifier.padding(top = 4.dp)
                 )
+                Text(
+                    text = booking.status.replace('_', ' '),
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = statusColor,
+                    modifier = Modifier.padding(top = 2.dp)
+                )
             }
 
             Text(
-                text = "$${booking.price.toInt()}",
+                text = "$${String.format("%,.2f", booking.totalPrice)}",
                 fontSize = 17.sp,
                 fontWeight = FontWeight.Bold,
                 color = AdminTheme.TextPrimary
             )
         }
     }
-}
-
-private fun imageResForTour(tourName: String, destinations: List<Destination>): Int {
-    val match = destinations.firstOrNull { destination ->
-        tourName.contains(destination.name, ignoreCase = true)
-    }
-    return match?.imageRes ?: R.drawable.angkorwat
 }

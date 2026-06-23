@@ -2,6 +2,11 @@ package com.example.final_project.domain.model
 
 import com.example.final_project.R
 
+data class CategoryOption(
+    val id: Long,
+    val name: String
+)
+
 data class Destination(
     val id: String,
     val name: String,
@@ -9,8 +14,16 @@ data class Destination(
     val category: String,
     val price: Double,
     val rating: Double,
-    val imageRes: Int,
-    val description: String
+    val imageRes: Int = R.drawable.angkorwat,
+    val imageUrl: String? = null,
+    val description: String = "",
+    val categoryId: Long? = null,
+    val latitude: Double = 0.0,
+    val longitude: Double = 0.0,
+    val durationHours: Int = 8,
+    val maxPeople: Int = 20,
+    val isActive: Boolean = true,
+    val isFavorite: Boolean = false
 )
 
 val mockDestinations = listOf(

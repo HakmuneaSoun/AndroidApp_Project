@@ -19,6 +19,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.final_project.data.remote.dto.BookingData
 import com.example.final_project.domain.model.PaymentMethod
 
 private val ScreenBg = Color(0xFFF8F9FC)
@@ -29,14 +30,16 @@ private val ActionGreen = Color(0xFF16A34A)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PaymentScreen(
-    totalAmount: Double,
+    booking: BookingData,
     selectedMethod: PaymentMethod,
+    isProcessing: Boolean,
+    errorMessage: String?,
     onMethodChange: (PaymentMethod) -> Unit,
     onNavigateBack: () -> Unit,
-    onPayNow: () -> Unit
+    onPayNow: () -> Unit,
+    onPaymentSuccessDismiss: () -> Unit,
+    paymentSuccess: Boolean
 ) {
-    var showSuccess by remember { mutableStateOf(false) }
-
     Scaffold(
         topBar = {
             TopAppBar(
@@ -72,20 +75,37 @@ fun PaymentScreen(
                     colors = CardDefaults.cardColors(containerColor = Color.White),
                     elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
                 ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(20.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text("Total Amount", fontSize = 15.sp, color = TextSecondary)
+                    Column(modifier = Modifier.padding(20.dp)) {
+                        Text("Booking Summary", fontSize = 13.sp, color = TextSecondary)
+                        Spacer(modifier = Modifier.height(8.dp))
                         Text(
-                            text = "$${totalAmount.toInt()}",
-                            fontSize = 28.sp,
-                            fontWeight = FontWeight.Bold,
+                            booking.tourTitle,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.SemiBold,
                             color = TextPrimary
                         )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text("Code: ${booking.bookingCode}", fontSize = 13.sp, color = TextSecondary)
+                        Text("Date: ${booking.tourDate}", fontSize = 13.sp, color = TextSecondary)
+                        Text(
+                            "Travelers: ${booking.peopleCount}",
+                            fontSize = 13.sp,
+                            color = TextSecondary
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("Total Amount", fontSize = 15.sp, color = TextSecondary)
+                            Text(
+                                text = "$${String.format("%.2f", booking.totalPrice)}",
+                                fontSize = 28.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = TextPrimary
+                            )
+                        }
                     }
                 }
 
@@ -106,6 +126,11 @@ fun PaymentScreen(
                     )
                     Spacer(modifier = Modifier.height(10.dp))
                 }
+
+                if (errorMessage != null) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(errorMessage, color = Color(0xFFE53935), fontSize = 13.sp)
+                }
             }
 
             Column(
@@ -116,7 +141,8 @@ fun PaymentScreen(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Button(
-                    onClick = { showSuccess = true },
+                    onClick = onPayNow,
+                    enabled = !isProcessing,
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(52.dp),
@@ -126,7 +152,15 @@ fun PaymentScreen(
                         contentColor = Color.White
                     )
                 ) {
-                    Text("Pay Now", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                    if (isProcessing) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(22.dp),
+                            color = Color.White,
+                            strokeWidth = 2.dp
+                        )
+                    } else {
+                        Text("Pay Now", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                    }
                 }
                 Spacer(modifier = Modifier.height(12.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -147,19 +181,15 @@ fun PaymentScreen(
         }
     }
 
-    if (showSuccess) {
+    if (paymentSuccess) {
         AlertDialog(
-            onDismissRequest = {
-                showSuccess = false
-                onPayNow()
-            },
+            onDismissRequest = onPaymentSuccessDismiss,
             title = { Text("Payment Successful", fontWeight = FontWeight.Bold) },
-            text = { Text("Your booking has been confirmed. Enjoy your trip!") },
+            text = {
+                Text("Booking ${booking.bookingCode} is confirmed. Enjoy your trip!")
+            },
             confirmButton = {
-                TextButton(onClick = {
-                    showSuccess = false
-                    onPayNow()
-                }) {
+                TextButton(onClick = onPaymentSuccessDismiss) {
                     Text("Done", color = ActionGreen, fontWeight = FontWeight.SemiBold)
                 }
             }

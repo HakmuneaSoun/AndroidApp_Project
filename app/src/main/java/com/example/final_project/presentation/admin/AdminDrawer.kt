@@ -51,7 +51,7 @@ fun AdminDrawerContent(
         AdminMenuItem(AdminScreen.Users, Icons.Default.People, "Users", 156),
         AdminMenuItem(AdminScreen.Categories, Icons.Default.Category, "Categories", 6),
         AdminMenuItem(AdminScreen.Profile, Icons.Default.Person, "Profile"),
-        AdminMenuItem(null, Icons.Default.Settings, "Setting"),
+//        AdminMenuItem(null, Icons.Default.Settings, "Setting"),
         AdminMenuItem(null, Icons.Default.Logout, "Logout", isLogout = true)
     )
 

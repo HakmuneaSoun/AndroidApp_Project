@@ -34,20 +34,26 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.example.final_project.R
 import com.example.final_project.domain.model.Destination
-import com.example.final_project.domain.model.TourCategory
-import com.example.final_project.domain.model.defaultTourCategories
 import com.example.final_project.domain.model.mockAdminNotifications
-import com.example.final_project.domain.model.mockDestinations
+import com.example.final_project.presentation.categories.CategoriesViewModel
+import com.example.final_project.presentation.categories.CategoriesViewModelFactory
 import com.example.final_project.presentation.notifications.NotificationBellIcon
 import com.example.final_project.presentation.notifications.NotificationStyle
 import com.example.final_project.presentation.notifications.NotificationsScreen
+import com.example.final_project.presentation.profile.EditProfileScreen
+import com.example.final_project.presentation.profile.ProfileViewModel
+import com.example.final_project.presentation.profile.ProfileViewModelFactory
+import com.example.final_project.presentation.tours.ToursViewModel
+import com.example.final_project.presentation.tours.ToursViewModelFactory
 import kotlinx.coroutines.launch
 
 data class MenuItem(
@@ -69,30 +75,53 @@ data class AdminProfile(
 fun AdminDashboardScreen(
     onNavigateBack: () -> Unit
 ) {
+    val context = LocalContext.current
+    val profileViewModel: ProfileViewModel = viewModel(
+        factory = ProfileViewModelFactory(context.applicationContext as android.app.Application)
+    )
+    val profileState = profileViewModel.uiState
+    val toursViewModel: ToursViewModel = viewModel(
+        factory = ToursViewModelFactory(context.applicationContext as android.app.Application)
+    )
+    val toursState = toursViewModel.uiState
+    val categoriesViewModel: CategoriesViewModel = viewModel(
+        factory = CategoriesViewModelFactory(context.applicationContext as android.app.Application)
+    )
+    val categoriesState = categoriesViewModel.uiState
+
     var currentScreen by remember { mutableStateOf<AdminScreen>(AdminScreen.Dashboard) }
     var selectedDestination by remember { mutableStateOf<Destination?>(null) }
-    val destinations = remember { mockDestinations.toMutableStateList() }
-    val tourCategories = remember { defaultTourCategories.toMutableStateList() }
     var toursSearchQuery by remember { mutableStateOf("") }
     var adminProfile by remember { mutableStateOf(AdminProfile()) }
     val adminNotifications = remember { mockAdminNotifications.toMutableStateList() }
     var previousAdminScreen by remember { mutableStateOf(AdminScreen.Dashboard) }
 
-    fun addCategoryName(name: String) {
-        val trimmed = name.trim()
-        if (trimmed.isEmpty()) return
-        if (tourCategories.none { it.name.equals(trimmed, ignoreCase = true) }) {
-            tourCategories.add(
-                TourCategory(
-                    id = System.currentTimeMillis().toString(),
-                    name = trimmed,
-                    imageRes = R.drawable.angkorwat
-                )
-            )
+    LaunchedEffect(toursState.saveCompleted) {
+        if (toursState.saveCompleted) {
+            toursViewModel.clearSaveCompleted()
+            currentScreen = AdminScreen.Tours
         }
     }
 
-    val categoryNames = tourCategories.map { it.name }
+    LaunchedEffect(currentScreen, selectedDestination) {
+        when (currentScreen) {
+            AdminScreen.AddTour -> toursViewModel.prepareTourForm(null)
+            AdminScreen.EditTour -> toursViewModel.prepareTourForm(selectedDestination)
+            else -> Unit
+        }
+    }
+
+    LaunchedEffect(profileState.profile) {
+        profileState.profile?.let { profile ->
+            adminProfile = AdminProfile(
+                name = profile.name,
+                email = profile.email,
+                phone = profile.phone.orEmpty(),
+                role = profile.role,
+                profileImage = profile.avatarUrl.orEmpty()
+            )
+        }
+    }
 
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
@@ -151,7 +180,7 @@ fun AdminDashboardScreen(
                         navigateTo(screen)
                         closeDrawer()
                     },
-                    onLogout = onNavigateBack,
+                    onLogout = { profileViewModel.logout(onNavigateBack) },
                     onProfileClick = {
                         navigateTo(AdminScreen.Profile)
                         closeDrawer()
@@ -223,14 +252,17 @@ fun AdminDashboardScreen(
                 when (screen) {
                     AdminScreen.Dashboard -> {
                         AdminDashboardContent(
-                            destinations = destinations,
                             onViewAllBookings = { navigateTo(AdminScreen.Bookings) }
                         )
                     }
 
                     AdminScreen.Tours -> {
                         AdminToursScreen(
-                            destinations = destinations,
+                            destinations = toursState.tours,
+                            isLoading = toursState.isLoading,
+                            isDeletingTourId = toursState.isDeletingTourId,
+                            errorMessage = toursState.errorMessage,
+                            successMessage = toursState.successMessage,
                             searchQuery = toursSearchQuery,
                             onSearchQueryChange = { toursSearchQuery = it },
                             onAddTour = { navigateTo(AdminScreen.AddTour) },
@@ -238,33 +270,40 @@ fun AdminDashboardScreen(
                                 selectedDestination = destination
                                 navigateTo(AdminScreen.EditTour)
                             },
-                            onDeleteTour = { destinations.remove(it) }
+                            onDeleteTour = { destination ->
+                                destination.id.toLongOrNull()?.let { toursViewModel.deleteTour(it) }
+                            },
+                            onDismissMessage = { toursViewModel.clearMessages() }
                         )
                     }
 
                     AdminScreen.AddTour -> {
                         AdminAddTourScreen(
                             initialDestination = null,
-                            categoryNames = categoryNames,
-                            onCategoryAdded = ::addCategoryName,
+                            categories = categoriesState.categoryOptions,
+                            imageCoverUrl = toursState.pendingImageUrl,
+                            isSaving = toursState.isSaving,
+                            isUploadingImage = toursState.isUploadingImage,
+                            errorMessage = toursState.errorMessage,
                             onBack = { navigateTo(AdminScreen.Tours) },
-                            onSave = { newDestination ->
-                                destinations.add(newDestination)
-                                navigateTo(AdminScreen.Tours)
-                            }
+                            onUploadImage = toursViewModel::uploadTourImage,
+                            onSave = { form, _ -> toursViewModel.createTour(form) }
                         )
                     }
 
                     AdminScreen.EditTour -> {
                         AdminAddTourScreen(
                             initialDestination = selectedDestination,
-                            categoryNames = categoryNames,
-                            onCategoryAdded = ::addCategoryName,
+                            categories = categoriesState.categoryOptions,
+                            imageCoverUrl = toursState.pendingImageUrl,
+                            isSaving = toursState.isSaving,
+                            isUploadingImage = toursState.isUploadingImage,
+                            errorMessage = toursState.errorMessage,
                             onBack = { navigateTo(AdminScreen.Tours) },
-                            onSave = { updatedDestination ->
-                                val index = destinations.indexOfFirst { it.id == updatedDestination.id }
-                                if (index != -1) destinations[index] = updatedDestination
-                                navigateTo(AdminScreen.Tours)
+                            onUploadImage = toursViewModel::uploadTourImage,
+                            onSave = { form, tourId ->
+                                val id = tourId ?: selectedDestination?.id?.toLongOrNull()
+                                if (id != null) toursViewModel.updateTour(id, form)
                             }
                         )
                     }
@@ -279,8 +318,8 @@ fun AdminDashboardScreen(
 
                     AdminScreen.Categories -> {
                         AdminCategoriesScreen(
-                            categories = tourCategories,
-                            destinations = destinations
+                            destinations = toursState.tours,
+                            viewModel = categoriesViewModel
                         )
                     }
 
@@ -298,365 +337,23 @@ fun AdminDashboardScreen(
 
                     AdminScreen.Profile -> {
                         EditProfileScreen(
-                            adminProfile = adminProfile,
-                            onProfileUpdate = { adminProfile = it },
-                            onBack = { navigateTo(AdminScreen.Dashboard) }
+                            onBack = { navigateTo(AdminScreen.Dashboard) },
+                            onSaved = { updated ->
+                                adminProfile = AdminProfile(
+                                    name = updated.name,
+                                    email = updated.email,
+                                    phone = updated.phone.orEmpty(),
+                                    role = updated.role,
+                                    profileImage = updated.avatarUrl.orEmpty()
+                                )
+                            },
+                            useAdminTheme = true,
+                            viewModel = profileViewModel
                         )
                     }
                 }
             }
         }
-    }
-}
-
-@Composable
-fun EditProfileScreen(
-    adminProfile: AdminProfile,
-    onProfileUpdate: (AdminProfile) -> Unit,
-    onBack: () -> Unit
-) {
-    var name by remember { mutableStateOf(adminProfile.name) }
-    var email by remember { mutableStateOf(adminProfile.email) }
-    var phone by remember { mutableStateOf(adminProfile.phone) }
-    var role by remember { mutableStateOf(adminProfile.role) }
-    var profileImage by remember { mutableStateOf("") }
-    var isEditing by remember { mutableStateOf(false) }
-
-    // Menu items for edit profile
-    val editMenuItems = listOf(
-        EditMenuItem(Icons.Default.Person, "Personal Information", "Update your personal details"),
-        EditMenuItem(Icons.Default.Phone, "Contact Details", "Manage your contact information"),
-        EditMenuItem(Icons.Default.Lock, "Security", "Change password & security settings"),
-        EditMenuItem(Icons.Default.Notifications, "Notifications", "Manage notification preferences"),
-        EditMenuItem(Icons.Default.Info, "About", "App information & version")
-    )
-
-    LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(AdminTheme.Background)
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        // Profile Photo Section
-        item {
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .shadow(
-                        elevation = 4.dp,
-                        shape = RoundedCornerShape(16.dp),
-                        clip = false
-                    ),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = Color.White
-                )
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(20.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text(
-                        text = "Profile Photo",
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.Black
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    // Profile Image with upload button
-                    Box(
-                        modifier = Modifier
-                            .size(120.dp)
-                            .shadow(
-                                elevation = 8.dp,
-                                shape = CircleShape,
-                                clip = false
-                            )
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(120.dp)
-                                .clip(CircleShape)
-                                .background(
-                                    Brush.horizontalGradient(
-                                        colors = listOf(
-                                            Color(0xFF2196F3),
-                                            Color(0xFF4FC3F7)
-                                        )
-                                    )
-                                ),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = "A",
-                                fontSize = 48.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White
-                            )
-                        }
-
-                        // Edit icon overlay
-                        Box(
-                            modifier = Modifier
-                                .align(Alignment.BottomEnd)
-                                .size(36.dp)
-                                .clip(CircleShape)
-                                .background(Color(0xFF2196F3))
-                                .border(2.dp, Color.White, CircleShape)
-                                .clickable {
-                                    // Photo picker logic would go here
-                                    isEditing = true
-                                },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                Icons.Default.PhotoCamera,
-                                contentDescription = "Change Photo",
-                                tint = Color.White,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    Text(
-                        text = "Tap the camera icon to change photo",
-                        fontSize = 11.sp,
-                        color = Color.Gray
-                    )
-                }
-            }
-        }
-
-        // Personal Information Card
-        item {
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .shadow(
-                        elevation = 4.dp,
-                        shape = RoundedCornerShape(16.dp),
-                        clip = false
-                    ),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = Color.White
-                )
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(20.dp)
-                ) {
-                    Text(
-                        text = "Personal Information",
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.Black
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    OutlinedTextField(
-                        value = name,
-                        onValueChange = { name = it },
-                        label = { Text("Full Name") },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(8.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = Color(0xFF2196F3),
-                            focusedLabelColor = Color(0xFF2196F3)
-                        ),
-                        leadingIcon = {
-                            Icon(Icons.Default.Person, contentDescription = null, tint = Color(0xFF2196F3))
-                        }
-                    )
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    OutlinedTextField(
-                        value = email,
-                        onValueChange = { email = it },
-                        label = { Text("Email Address") },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(8.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = Color(0xFF2196F3),
-                            focusedLabelColor = Color(0xFF2196F3)
-                        ),
-                        leadingIcon = {
-                            Icon(Icons.Default.Email, contentDescription = null, tint = Color(0xFF2196F3))
-                        }
-                    )
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    OutlinedTextField(
-                        value = phone,
-                        onValueChange = { phone = it },
-                        label = { Text("Phone Number") },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(8.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = Color(0xFF2196F3),
-                            focusedLabelColor = Color(0xFF2196F3)
-                        ),
-                        leadingIcon = {
-                            Icon(Icons.Default.Phone, contentDescription = null, tint = Color(0xFF2196F3))
-                        }
-                    )
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    OutlinedTextField(
-                        value = role,
-                        onValueChange = { role = it },
-                        label = { Text("Role") },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(8.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = Color(0xFF2196F3),
-                            focusedLabelColor = Color(0xFF2196F3)
-                        ),
-                        leadingIcon = {
-                            Icon(Icons.Default.Badge, contentDescription = null, tint = Color(0xFF2196F3))
-                        }
-                    )
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        OutlinedButton(
-                            onClick = onBack,
-                            modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(8.dp)
-                        ) {
-                            Text("Cancel")
-                        }
-
-                        Button(
-                            onClick = {
-                                val updatedProfile = adminProfile.copy(
-                                    name = name,
-                                    email = email,
-                                    phone = phone,
-                                    role = role
-                                )
-                                onProfileUpdate(updatedProfile)
-                            },
-                            modifier = Modifier.weight(1f),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = Color(0xFF2196F3),
-                                contentColor = Color.White
-                            ),
-                            shape = RoundedCornerShape(8.dp)
-                        ) {
-                            Icon(Icons.Default.Save, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("Save Changes")
-                        }
-                    }
-                }
-            }
-        }
-
-        // Quick Settings
-        item {
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .shadow(
-                        elevation = 4.dp,
-                        shape = RoundedCornerShape(16.dp),
-                        clip = false
-                    ),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = Color.White
-                )
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp)
-                ) {
-                    Text(
-                        text = "Quick Settings",
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.Black
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    editMenuItems.forEach { item ->
-                        EditMenuItemRow(item = item)
-                        if (item != editMenuItems.last()) {
-                            HorizontalDivider(color = Color.LightGray.copy(alpha = 0.3f))
-                        }
-                    }
-                }
-            }
-        }
-
-        item {
-            Spacer(modifier = Modifier.height(16.dp))
-        }
-    }
-}
-
-data class EditMenuItem(
-    val icon: ImageVector,
-    val title: String,
-    val subtitle: String
-)
-
-@Composable
-fun EditMenuItemRow(item: EditMenuItem) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { /* Navigate to respective setting */ }
-            .padding(vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Surface(
-            modifier = Modifier.size(36.dp),
-            shape = CircleShape,
-            color = Color(0xFF2196F3).copy(alpha = 0.1f)
-        ) {
-            Box(contentAlignment = Alignment.Center) {
-                Icon(
-                    item.icon,
-                    contentDescription = null,
-                    tint = Color(0xFF2196F3),
-                    modifier = Modifier.size(18.dp)
-                )
-            }
-        }
-        Spacer(modifier = Modifier.width(12.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = item.title,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Medium,
-                color = Color.Black
-            )
-            Text(
-                text = item.subtitle,
-                fontSize = 11.sp,
-                color = Color.Gray
-            )
-        }
-        Icon(
-            Icons.Default.ChevronRight,
-            contentDescription = null,
-            tint = Color.LightGray
-        )
     }
 }
 

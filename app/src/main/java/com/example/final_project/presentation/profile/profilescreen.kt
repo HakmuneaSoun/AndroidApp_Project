@@ -27,6 +27,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.viewmodel.compose.viewModel
+import coil.compose.AsyncImage
+import com.example.final_project.data.remote.ApiConstants
+import com.example.final_project.data.remote.dto.UserProfileData
 import com.example.final_project.navigation.AppBottomBar
 import com.example.final_project.navigation.BottomNavItem
 import kotlinx.coroutines.MainScope
@@ -54,7 +60,25 @@ fun ProfileScreen(
     selectedTab: BottomNavItem = BottomNavItem.Profile,
     onTabSelected: (BottomNavItem) -> Unit = {}
 ) {
+    val context = LocalContext.current
+    val viewModel: ProfileViewModel = viewModel(
+        factory = ProfileViewModelFactory(context.applicationContext as android.app.Application)
+    )
+    val profileState = viewModel.uiState
     var showLogoutDialog by remember { mutableStateOf(false) }
+    var showEditProfile by remember { mutableStateOf(false) }
+
+    if (showEditProfile) {
+        EditProfileScreen(
+            onBack = {
+                showEditProfile = false
+                viewModel.loadProfile()
+            },
+            onSaved = { showEditProfile = false },
+            viewModel = viewModel
+        )
+        return
+    }
 
     val menuSections = listOf(
         MenuSection(
@@ -69,7 +93,8 @@ fun ProfileScreen(
         MenuSection(
             "Account",
             listOf(
-                ProfileMenuItem(Icons.Default.Edit, "Edit Profile", "Update personal info", AccentColor),
+                ProfileMenuItem(Icons.Default.Edit, "Edit Profile", "Update personal info", AccentColor,
+                    onClick = { showEditProfile = true }),
                 ProfileMenuItem(Icons.Default.Payments, "Payment Methods", "Manage cards & wallets", Color(0xFF4CAF50)),
                 ProfileMenuItem(Icons.Default.Notifications, "Notifications", "Manage alerts & offers", Color(0xFFFF9800), onClick = onNotificationsClick),
                 ProfileMenuItem(Icons.Default.Security, "Security", "Password & login", Color(0xFF9C27B0))
@@ -117,7 +142,13 @@ fun ProfileScreen(
         ) {
 
             // ── Hero Profile Card ──────────────────────────────────────────────
-            item { ProfileHeroCard() }
+            item {
+                ProfileHeroCard(
+                    profile = profileState.profile,
+                    isLoading = profileState.isLoading,
+                    onEditPhotoClick = { showEditProfile = true }
+                )
+            }
 
             // ── Travel Stats ───────────────────────────────────────────────────
             item { TravelStatsRow() }
@@ -143,7 +174,10 @@ fun ProfileScreen(
 
     if (showLogoutDialog) {
         LogoutDialog(
-            onConfirm = { showLogoutDialog = false; onLogout() },
+            onConfirm = {
+                showLogoutDialog = false
+                viewModel.logout(onLogout)
+            },
             onDismiss = { showLogoutDialog = false }
         )
     }
@@ -151,7 +185,18 @@ fun ProfileScreen(
 
 // ── Profile Hero Card ──────────────────────────────────────────────────────────
 @Composable
-fun ProfileHeroCard() {
+fun ProfileHeroCard(
+    profile: UserProfileData?,
+    isLoading: Boolean = false,
+    onEditPhotoClick: () -> Unit = {}
+) {
+    val displayName = profile?.name ?: "..."
+    val displayEmail = profile?.email ?: "..."
+    val avatarUrl = ApiConstants.resolveMediaUrl(profile?.avatarUrl)
+    val initials = profile?.name?.trim()?.split(" ")?.filter { it.isNotBlank() }?.take(2)
+        ?.joinToString("") { it.first().uppercaseChar().toString() }
+        ?.ifBlank { profile.name.firstOrNull()?.uppercaseChar()?.toString() ?: "?" } ?: "?"
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -199,14 +244,27 @@ fun ProfileHeroCard() {
                             .background(Color.White),
                         contentAlignment = Alignment.Center
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .size(88.dp)
-                                .clip(CircleShape)
-                                .background(Brush.linearGradient(colors = listOf(AccentColor, AccentDark))),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text("SP", fontSize = 36.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                        if (isLoading) {
+                            CircularProgressIndicator(color = AccentColor, modifier = Modifier.size(32.dp))
+                        } else if (!avatarUrl.isNullOrBlank()) {
+                            AsyncImage(
+                                model = avatarUrl,
+                                contentDescription = "Profile photo",
+                                modifier = Modifier
+                                    .size(88.dp)
+                                    .clip(CircleShape),
+                                contentScale = ContentScale.Crop
+                            )
+                        } else {
+                            Box(
+                                modifier = Modifier
+                                    .size(88.dp)
+                                    .clip(CircleShape)
+                                    .background(Brush.linearGradient(colors = listOf(AccentColor, AccentDark))),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(initials, fontSize = 36.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                            }
                         }
                     }
                     // Edit badge
@@ -214,7 +272,7 @@ fun ProfileHeroCard() {
                         modifier = Modifier
                             .align(Alignment.BottomEnd)
                             .size(28.dp)
-                            .clickable { },
+                            .clickable(onClick = onEditPhotoClick),
                         shape = CircleShape,
                         color = Color.White,
                         shadowElevation = 4.dp
@@ -228,8 +286,8 @@ fun ProfileHeroCard() {
 
                 Spacer(modifier = Modifier.height(14.dp))
 
-                Text("Sakha Pech", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                Text("sakha.pech@example.com", fontSize = 13.sp, color = Color.White.copy(alpha = 0.82f))
+                Text(displayName, fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                Text(displayEmail, fontSize = 13.sp, color = Color.White.copy(alpha = 0.82f))
 
                 Spacer(modifier = Modifier.height(8.dp))
 
@@ -242,14 +300,18 @@ fun ProfileHeroCard() {
                         Icon(Icons.Default.LocationOn, contentDescription = null,
                             tint = Color.White.copy(alpha = 0.8f), modifier = Modifier.size(13.dp))
                         Spacer(modifier = Modifier.width(3.dp))
-                        Text("Phnom Penh, KH", fontSize = 12.sp, color = Color.White.copy(alpha = 0.8f))
+                        Text(profile?.phone?.ifBlank { "No phone added" } ?: "No phone added",
+                            fontSize = 12.sp, color = Color.White.copy(alpha = 0.8f))
                     }
                     Box(modifier = Modifier.size(3.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.5f)))
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Default.CalendarToday, contentDescription = null,
                             tint = Color.White.copy(alpha = 0.8f), modifier = Modifier.size(13.dp))
                         Spacer(modifier = Modifier.width(3.dp))
-                        Text("Member since 2023", fontSize = 12.sp, color = Color.White.copy(alpha = 0.8f))
+                        Text(
+                            profile?.role?.replaceFirstChar { it.uppercase() } ?: "Member",
+                            fontSize = 12.sp, color = Color.White.copy(alpha = 0.8f)
+                        )
                     }
                 }
 
@@ -264,7 +326,8 @@ fun ProfileHeroCard() {
                         Icon(Icons.Default.Verified, contentDescription = null,
                             tint = Color(0xFFFFD700), modifier = Modifier.size(15.dp))
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("Premium Explorer", color = Color.White,
+                        Text(profile?.role?.replaceFirstChar { it.uppercase() } ?: "Explorer",
+                            color = Color.White,
                             fontWeight = FontWeight.Bold, fontSize = 13.sp)
                     }
                 }

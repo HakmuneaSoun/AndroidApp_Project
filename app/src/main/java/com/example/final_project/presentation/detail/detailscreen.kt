@@ -31,9 +31,12 @@ import coil.compose.AsyncImage
 import androidx.compose.foundation.Image
 import androidx.compose.ui.res.painterResource
 import com.example.final_project.domain.model.Destination
-import com.example.final_project.domain.model.mockDestinations
 import com.example.final_project.navigation.AppBottomBar
 import com.example.final_project.navigation.BottomNavItem
+import com.example.final_project.presentation.common.DestinationImage
+import com.example.final_project.presentation.favorite.FavoritesViewModel
+import com.example.final_project.presentation.reviews.ReviewsViewModel
+import com.example.final_project.presentation.tours.ToursViewModel
 
 private val AccentColor = Color(0xFF667eea)
 private val AccentColorDark = Color(0xFF764ba2)
@@ -43,23 +46,64 @@ private val ScreenBackground = Color(0xFFFAFAFC)
 @Composable
 fun DetailScreen(
     destinationId: String,
+    toursViewModel: ToursViewModel,
+    favoritesViewModel: FavoritesViewModel,
+    reviewsViewModel: ReviewsViewModel,
     onNavigateBack: () -> Unit,
     onNavigateToDestination: (String) -> Unit = {},
     onBookNow: () -> Unit = {},
     selectedTab: BottomNavItem = BottomNavItem.Home,
     onTabSelected: (BottomNavItem) -> Unit = {}
 ) {
-    var isFavorite by remember { mutableStateOf(false) }
+    val favoritesState = favoritesViewModel.uiState
+    val reviewsState = reviewsViewModel.uiState
+    val tourId = destinationId.toLongOrNull()
+    val isFavorite = tourId?.let { favoritesViewModel.isFavorite(it) } == true
+    val isTogglingFavorite = tourId != null && favoritesState.togglingTourId == tourId
+    val toursState = toursViewModel.uiState
 
-    // Mock destination data based on ID
-    val destination = mockDestinations.find { it.id == destinationId } ?: mockDestinations[0]
+    LaunchedEffect(destinationId) {
+        tourId?.let {
+            toursViewModel.loadTourById(it)
+            favoritesViewModel.checkFavorite(it)
+            reviewsViewModel.loadReviews(it)
+        }
+    }
+
+    var showReviewDialog by remember { mutableStateOf(false) }
+
+    val destination = toursState.selectedTour
+        ?: toursState.tours.find { it.id == destinationId }
+        ?: toursState.tours.firstOrNull()
+
+    if (toursState.isLoading && destination == null) {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            CircularProgressIndicator(color = AccentColor)
+        }
+        return
+    }
+
+    if (destination == null) {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Text("Tour not found", color = Color.Gray)
+        }
+        return
+    }
+
+    val nearbyDestinations = remember(destination, toursState.tours) {
+        val sameProvince = toursState.tours.filter { it.id != destination.id && it.province == destination.province }
+        if (sameProvince.isNotEmpty()) sameProvince.take(6)
+        else toursState.tours.filter { it.id != destination.id }.sortedByDescending { it.rating }.take(6)
+    }
 
     val highlights = remember(destination) { highlightsFor(destination.category) }
     val tips = remember(destination) { tipsFor(destination.category) }
-    val nearbyDestinations = remember(destination) {
-        val sameProvince = mockDestinations.filter { it.id != destination.id && it.province == destination.province }
-        if (sameProvince.isNotEmpty()) sameProvince.take(6)
-        else mockDestinations.filter { it.id != destination.id }.sortedByDescending { it.rating }.take(6)
+
+    LaunchedEffect(reviewsState.submitSuccess) {
+        if (reviewsState.submitSuccess) {
+            showReviewDialog = false
+            reviewsViewModel.clearMessages()
+        }
     }
 
     Scaffold(
@@ -83,12 +127,25 @@ fun DetailScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = { isFavorite = !isFavorite }) {
-                        Icon(
-                            if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                            contentDescription = "Favorite",
-                            tint = if (isFavorite) Color(0xFFFF4759) else Color.Black
-                        )
+                    IconButton(
+                        onClick = {
+                            tourId?.let { favoritesViewModel.toggleFavorite(it, destination) }
+                        },
+                        enabled = tourId != null && !isTogglingFavorite
+                    ) {
+                        if (isTogglingFavorite) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(20.dp),
+                                strokeWidth = 2.dp,
+                                color = Color(0xFFFF4759)
+                            )
+                        } else {
+                            Icon(
+                                if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                                contentDescription = "Favorite",
+                                tint = if (isFavorite) Color(0xFFFF4759) else Color.Black
+                            )
+                        }
                     }
                     IconButton(onClick = { /* Share */ }) {
                         Icon(
@@ -125,8 +182,8 @@ fun DetailScreen(
                         .fillMaxWidth()
                         .height(320.dp)
                 ) {
-                    Image(
-                        painter = painterResource(id = destination.imageRes),
+                    DestinationImage(
+                        destination = destination,
                         contentDescription = destination.name,
                         modifier = Modifier.fillMaxSize(),
                         contentScale = ContentScale.Crop
@@ -357,49 +414,49 @@ fun DetailScreen(
             }
 
             // Traveler Tips
-            item {
-                Column(modifier = Modifier.padding(top = 8.dp)) {
-                    SectionLabel("Traveler Tips")
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp)
-                            .shadow(
-                                elevation = 3.dp,
-                                shape = RoundedCornerShape(16.dp),
-                                clip = false
-                            ),
-                        shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color.White)
-                    ) {
-                        Column(modifier = Modifier.padding(16.dp)) {
-                            tips.forEachIndexed { index, tip ->
-                                Row(verticalAlignment = Alignment.Top) {
-                                    Surface(
-                                        modifier = Modifier.size(20.dp),
-                                        shape = CircleShape,
-                                        color = AccentColor.copy(alpha = 0.12f)
-                                    ) {
-                                        Box(contentAlignment = Alignment.Center) {
-                                            Icon(
-                                                Icons.Default.Check,
-                                                contentDescription = null,
-                                                tint = AccentColor,
-                                                modifier = Modifier.size(12.dp)
-                                            )
-                                        }
-                                    }
-                                    Spacer(modifier = Modifier.width(10.dp))
-                                    Text(tip, fontSize = 13.sp, color = Color.Black, lineHeight = 18.sp)
-                                }
-                                if (index != tips.lastIndex) {
-                                    Spacer(modifier = Modifier.height(12.dp))
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+//            item {
+//                Column(modifier = Modifier.padding(top = 8.dp)) {
+//                    SectionLabel("Traveler Tips")
+//                    Card(
+//                        modifier = Modifier
+//                            .fillMaxWidth()
+//                            .padding(horizontal = 16.dp)
+//                            .shadow(
+//                                elevation = 3.dp,
+//                                shape = RoundedCornerShape(16.dp),
+//                                clip = false
+//                            ),
+//                        shape = RoundedCornerShape(16.dp),
+//                        colors = CardDefaults.cardColors(containerColor = Color.White)
+//                    ) {
+//                        Column(modifier = Modifier.padding(16.dp)) {
+//                            tips.forEachIndexed { index, tip ->
+//                                Row(verticalAlignment = Alignment.Top) {
+//                                    Surface(
+//                                        modifier = Modifier.size(20.dp),
+//                                        shape = CircleShape,
+//                                        color = AccentColor.copy(alpha = 0.12f)
+//                                    ) {
+//                                        Box(contentAlignment = Alignment.Center) {
+//                                            Icon(
+//                                                Icons.Default.Check,
+//                                                contentDescription = null,
+//                                                tint = AccentColor,
+//                                                modifier = Modifier.size(12.dp)
+//                                            )
+//                                        }
+//                                    }
+//                                    Spacer(modifier = Modifier.width(10.dp))
+//                                    Text(tip, fontSize = 13.sp, color = Color.Black, lineHeight = 18.sp)
+//                                }
+//                                if (index != tips.lastIndex) {
+//                                    Spacer(modifier = Modifier.height(12.dp))
+//                                }
+//                            }
+//                        }
+//                    }
+//                }
+//            }
 
             // Map Location
             item {
@@ -500,119 +557,97 @@ fun DetailScreen(
 
             // Reviews Section
             item {
+                val avgRating = if (reviewsState.reviews.isNotEmpty()) {
+                    reviewsState.reviews.map { it.rating }.average()
+                } else {
+                    destination.rating
+                }
+                val reviewCount = reviewsState.reviews.size
+
                 Column(modifier = Modifier.padding(16.dp)) {
-                    SectionLabel("Reviews")
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .shadow(
-                                elevation = 3.dp,
-                                shape = RoundedCornerShape(16.dp),
-                                clip = false
-                            ),
-                        shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color.White)
-                    ) {
-                        Column(modifier = Modifier.padding(16.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(
-                                    "${destination.rating}",
-                                    fontSize = 36.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.Black
-                                )
-                                Column(modifier = Modifier.padding(start = 12.dp)) {
-                                    Row {
-                                        repeat(5) { i ->
-                                            Icon(
-                                                if (i < destination.rating.toInt()) Icons.Default.Star else Icons.Default.StarBorder,
-                                                contentDescription = null,
-                                                tint = Color(0xFFFFD700),
-                                                modifier = Modifier.size(16.dp)
-                                            )
-                                        }
-                                    }
-                                    Text("Based on traveler reviews", fontSize = 11.sp, color = Color.Gray)
-                                }
-                            }
-                            Spacer(modifier = Modifier.height(12.dp))
-                            val breakdown = ratingBreakdown(destination.rating)
-                            for (starIndex in 0..4) {
-                                val starLabel = 5 - starIndex
-                                val fraction = breakdown[starIndex]
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.padding(vertical = 2.dp)
-                                ) {
-                                    Text("$starLabel", fontSize = 11.sp, color = Color.Gray, modifier = Modifier.width(14.dp))
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Box(
-                                        modifier = Modifier
-                                            .weight(1f)
-                                            .height(6.dp)
-                                            .clip(RoundedCornerShape(3.dp))
-                                            .background(Color.LightGray.copy(alpha = 0.3f))
-                                    ) {
-                                        Box(
-                                            modifier = Modifier
-                                                .fillMaxHeight()
-                                                .fillMaxWidth(fraction)
-                                                .clip(RoundedCornerShape(3.dp))
-                                                .background(Color(0xFFFFD700))
-                                        )
-                                    }
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text(
-                                        "${(fraction * 100).toInt()}%",
-                                        fontSize = 10.sp,
-                                        color = Color.Gray,
-                                        modifier = Modifier.width(32.dp)
-                                    )
-                                }
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            "Recent Reviews",
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.Black
-                        )
-                        Text(
-                            "See All",
-                            fontSize = 12.sp,
-                            color = AccentColor,
-                            fontWeight = FontWeight.Medium,
-                            modifier = Modifier.clickable { /* Navigate to all reviews */ }
-                        )
+                        SectionLabel("Reviews")
+                        TextButton(onClick = { showReviewDialog = true }) {
+                            Text("Write Review", color = AccentColor, fontSize = 13.sp)
+                        }
                     }
-
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    ReviewCard(
-                        userName = "John Doe",
-                        rating = 5,
-                        comment = "Amazing place! Highly recommended for anyone visiting Cambodia.",
-                        date = "2 days ago"
-                    )
+                    if (reviewsState.isLoading) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(24.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator(color = AccentColor, modifier = Modifier.size(28.dp))
+                        }
+                    } else {
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .shadow(
+                                    elevation = 3.dp,
+                                    shape = RoundedCornerShape(16.dp),
+                                    clip = false
+                                ),
+                            shape = RoundedCornerShape(16.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color.White)
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        String.format("%.1f", avgRating),
+                                        fontSize = 36.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.Black
+                                    )
+                                    Column(modifier = Modifier.padding(start = 12.dp)) {
+                                        Row {
+                                            repeat(5) { i ->
+                                                Icon(
+                                                    if (i < avgRating.toInt()) Icons.Default.Star else Icons.Default.StarBorder,
+                                                    contentDescription = null,
+                                                    tint = Color(0xFFFFD700),
+                                                    modifier = Modifier.size(16.dp)
+                                                )
+                                            }
+                                        }
+                                        Text(
+                                            if (reviewCount > 0) "Based on $reviewCount reviews"
+                                            else "No reviews yet",
+                                            fontSize = 11.sp,
+                                            color = Color.Gray
+                                        )
+                                    }
+                                }
+                            }
+                        }
 
-                    Spacer(modifier = Modifier.height(8.dp))
+                        Spacer(modifier = Modifier.height(16.dp))
 
-                    ReviewCard(
-                        userName = "Jane Smith",
-                        rating = 4,
-                        comment = "Beautiful temple complex. Best to come early morning to avoid crowds.",
-                        date = "1 week ago"
-                    )
+                        if (reviewsState.reviews.isEmpty()) {
+                            Text(
+                                "Be the first to review this tour.",
+                                fontSize = 13.sp,
+                                color = Color.Gray
+                            )
+                        } else {
+                            reviewsState.reviews.take(5).forEach { review ->
+                                ReviewCard(
+                                    userName = review.userName,
+                                    rating = review.rating,
+                                    comment = review.comment,
+                                    date = formatReviewDate(review.createdAt)
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                            }
+                        }
+                    }
                 }
             }
 
@@ -625,7 +660,10 @@ fun DetailScreen(
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     OutlinedButton(
-                        onClick = { isFavorite = !isFavorite },
+                        onClick = {
+                            tourId?.let { favoritesViewModel.toggleFavorite(it, destination) }
+                        },
+                        enabled = tourId != null && !isTogglingFavorite,
                         modifier = Modifier.height(56.dp),
                         shape = RoundedCornerShape(12.dp),
                         border = BorderStroke(1.dp, if (isFavorite) Color(0xFFFF4759) else Color.LightGray)
@@ -660,6 +698,90 @@ fun DetailScreen(
             }
         }
     }
+
+    if (showReviewDialog && tourId != null) {
+        WriteReviewDialog(
+            isSubmitting = reviewsState.isSubmitting,
+            errorMessage = reviewsState.errorMessage,
+            onDismiss = {
+                showReviewDialog = false
+                reviewsViewModel.clearMessages()
+            },
+            onSubmit = { rating, comment ->
+                reviewsViewModel.submitReview(tourId, rating, comment)
+            }
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun WriteReviewDialog(
+    isSubmitting: Boolean,
+    errorMessage: String?,
+    onDismiss: () -> Unit,
+    onSubmit: (Int, String) -> Unit
+) {
+    var rating by remember { mutableIntStateOf(5) }
+    var comment by remember { mutableStateOf("") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Write a Review", fontWeight = FontWeight.Bold) },
+        text = {
+            Column {
+                Text("Your rating", fontSize = 13.sp, color = Color.Gray)
+                Spacer(modifier = Modifier.height(8.dp))
+                Row {
+                    repeat(5) { index ->
+                        val star = index + 1
+                        IconButton(onClick = { rating = star }) {
+                            Icon(
+                                if (star <= rating) Icons.Default.Star else Icons.Default.StarBorder,
+                                contentDescription = null,
+                                tint = Color(0xFFFFD700)
+                            )
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+                OutlinedTextField(
+                    value = comment,
+                    onValueChange = { comment = it },
+                    label = { Text("Comment") },
+                    modifier = Modifier.fillMaxWidth(),
+                    minLines = 3,
+                    maxLines = 5
+                )
+                if (errorMessage != null) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(errorMessage, color = Color(0xFFE53935), fontSize = 12.sp)
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onSubmit(rating, comment) },
+                enabled = !isSubmitting && comment.isNotBlank()
+            ) {
+                if (isSubmitting) {
+                    CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                } else {
+                    Text("Submit", color = AccentColor, fontWeight = FontWeight.SemiBold)
+                }
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
+}
+
+private fun formatReviewDate(createdAt: String?): String {
+    if (createdAt.isNullOrBlank()) return ""
+    return createdAt.substringBefore("T")
 }
 
 @Composable
@@ -749,8 +871,8 @@ fun NearbyDestinationCard(destination: Destination, onClick: () -> Unit) {
                     .fillMaxWidth()
                     .height(90.dp)
             ) {
-                Image(
-                    painter = painterResource(id = destination.imageRes),
+                DestinationImage(
+                    destination = destination,
                     contentDescription = destination.name,
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop

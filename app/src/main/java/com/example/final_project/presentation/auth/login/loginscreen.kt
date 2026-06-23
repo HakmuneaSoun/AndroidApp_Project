@@ -32,6 +32,10 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.final_project.presentation.auth.AuthViewModel
+import com.example.final_project.presentation.auth.AuthViewModelFactory
+import androidx.compose.ui.platform.LocalContext
 
 // ─── Design tokens ───────────────────────────────────────────────────────────
 private val Primary       = Color(0xFF667eea)
@@ -60,17 +64,32 @@ fun LoginScreen(
     onLoginSuccess: () -> Unit,
     onAdminLoginSuccess: () -> Unit
 ) {
+    val context = LocalContext.current
+    val viewModel: AuthViewModel = viewModel(
+        factory = AuthViewModelFactory(context.applicationContext as android.app.Application)
+    )
+    val authState = viewModel.uiState
+
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
-    var isLoading by remember { mutableStateOf(false) }
-    var loginError by remember { mutableStateOf(false) }
-    var errorMessage by remember { mutableStateOf("") }
+    val isLoading = authState.isLoading
+    val loginError = authState.errorMessage != null
+    val errorMessage = authState.errorMessage.orEmpty()
 
-    val adminEmail = "admin@gmail.com"
-    val adminPassword = "123"
-    val userEmail = "user@user.com"
-    val userPassword = "user123"
+    LaunchedEffect(authState.loginSuccessIsAdmin) {
+        when (authState.loginSuccessIsAdmin) {
+            true -> {
+                onAdminLoginSuccess()
+                viewModel.clearLoginSuccess()
+            }
+            false -> {
+                onLoginSuccess()
+                viewModel.clearLoginSuccess()
+            }
+            null -> Unit
+        }
+    }
 
     // Pulsing animation for the hero decorations
     val infiniteTransition = rememberInfiniteTransition()
@@ -251,7 +270,7 @@ fun LoginScreen(
                 value = email,
                 onValueChange = {
                     email = it
-                    loginError = false
+                    viewModel.clearError()
                 },
                 label = { Text("Email address") },
                 leadingIcon = {
@@ -283,7 +302,7 @@ fun LoginScreen(
                 value = password,
                 onValueChange = {
                     password = it
-                    loginError = false
+                    viewModel.clearError()
                 },
                 label = { Text("Password") },
                 leadingIcon = {
@@ -332,36 +351,10 @@ fun LoginScreen(
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End
-            ) {
-                Text(
-                    text = "Forgot password?",
-                    color = Primary,
-                    fontWeight = FontWeight.Medium,
-                    fontSize = 13.sp,
-                    modifier = Modifier.clickable { onNavigateToForgotPassword() }
-                )
-            }
-
-            Spacer(modifier = Modifier.height(20.dp))
-
             // Login Button
             Button(
-                onClick = {
-                    isLoading = true
-                    when {
-                        email == adminEmail && password == adminPassword -> onAdminLoginSuccess()
-                        email == userEmail && password == userPassword -> onLoginSuccess()
-                        email.isNotEmpty() && password.isNotEmpty() -> onLoginSuccess()
-                        else -> {
-                            loginError = true
-                            errorMessage = "Incorrect email or password. Please try again."
-                        }
-                    }
-                    isLoading = false
-                },
+                onClick = { viewModel.login(email, password) },
+                enabled = !isLoading,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(52.dp)
@@ -431,73 +424,6 @@ fun LoginScreen(
                         }
                         Spacer(modifier = Modifier.width(8.dp))
                         Text("Google", fontSize = 13.sp, fontWeight = FontWeight.Medium)
-                    }
-                }
-
-                OutlinedButton(
-                    onClick = { /* Facebook Sign In */ },
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(48.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = TextPrimary),
-                    border = BorderStroke(1.dp, Color(0xFFE5E7EB))
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Surface(
-                            modifier = Modifier.size(18.dp),
-                            shape = CircleShape,
-                            color = Color(0xFF1877F2)
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Text("f", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                            }
-                        }
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Facebook", fontSize = 13.sp, fontWeight = FontWeight.Medium)
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            // Why sign up? trust signals
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(14.dp),
-                color = Color(0xFFF3F4F6)
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        "Why create an account?",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = TextPrimary
-                    )
-                    Spacer(modifier = Modifier.height(10.dp))
-                    val perks = listOf(
-                        Icons.Default.BookmarkBorder to "Save your favorite destinations",
-                        Icons.Default.ConfirmationNumber to "Book tours in a few taps",
-                        Icons.Default.Notifications to "Get exclusive offers & alerts",
-                        Icons.Default.Star to "Leave reviews & earn rewards"
-                    )
-                    perks.forEach { (icon, perk) ->
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(vertical = 4.dp)
-                        ) {
-                            Surface(
-                                modifier = Modifier.size(26.dp),
-                                shape = CircleShape,
-                                color = Primary.copy(alpha = 0.10f)
-                            ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Icon(icon, contentDescription = null, tint = Primary, modifier = Modifier.size(14.dp))
-                                }
-                            }
-                            Spacer(modifier = Modifier.width(10.dp))
-                            Text(perk, fontSize = 12.sp, color = TextSecondary)
-                        }
                     }
                 }
             }

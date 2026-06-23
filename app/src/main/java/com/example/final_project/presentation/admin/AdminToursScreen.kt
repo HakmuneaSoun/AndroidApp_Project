@@ -28,21 +28,57 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.final_project.R
+import com.example.final_project.domain.model.CategoryOption
 import com.example.final_project.domain.model.Destination
-
-private enum class CategoryInputMode { Select, AddNew }
+import com.example.final_project.presentation.common.DestinationImage
+import com.example.final_project.presentation.tours.TourFormData
+import android.net.Uri
+import coil.compose.AsyncImage
+import com.example.final_project.data.remote.ApiConstants
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AdminToursScreen(
     modifier: Modifier = Modifier,
     destinations: List<Destination>,
+    isLoading: Boolean = false,
+    isDeletingTourId: Long? = null,
+    errorMessage: String? = null,
+    successMessage: String? = null,
     searchQuery: String,
     onSearchQueryChange: (String) -> Unit,
     onAddTour: () -> Unit,
     onEditTour: (Destination) -> Unit,
-    onDeleteTour: (Destination) -> Unit
+    onDeleteTour: (Destination) -> Unit,
+    onDismissMessage: () -> Unit = {}
 ) {
+    var tourToDelete by remember { mutableStateOf<Destination?>(null) }
+
+    tourToDelete?.let { tour ->
+        AlertDialog(
+            onDismissRequest = { tourToDelete = null },
+            title = { Text("Delete tour?", fontWeight = FontWeight.Bold) },
+            text = {
+                Text("Are you sure you want to delete \"${tour.name}\"? This action cannot be undone.")
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        onDeleteTour(tour)
+                        tourToDelete = null
+                    }
+                ) {
+                    Text("Delete", color = AdminTheme.Error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { tourToDelete = null }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
     val filtered = remember(destinations, searchQuery) {
         if (searchQuery.isBlank()) destinations
         else destinations.filter {
@@ -62,7 +98,10 @@ fun AdminToursScreen(
 
         OutlinedTextField(
             value = searchQuery,
-            onValueChange = onSearchQueryChange,
+            onValueChange = {
+                onSearchQueryChange(it)
+                onDismissMessage()
+            },
             modifier = Modifier.fillMaxWidth(),
             placeholder = { Text("Search tours...", color = AdminTheme.TextSecondary) },
             leadingIcon = {
@@ -107,16 +146,36 @@ fun AdminToursScreen(
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        LazyColumn(
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-            contentPadding = PaddingValues(bottom = 24.dp)
-        ) {
-            items(filtered, key = { it.id }) { destination ->
-                TourListCard(
-                    destination = destination,
-                    onEdit = { onEditTour(destination) },
-                    onDelete = { onDeleteTour(destination) }
-                )
+        if (errorMessage != null) {
+            Text(errorMessage, fontSize = 12.sp, color = AdminTheme.Error, modifier = Modifier.padding(bottom = 8.dp))
+        }
+        if (successMessage != null) {
+            Text(successMessage, fontSize = 12.sp, color = Color(0xFF4CAF50), modifier = Modifier.padding(bottom = 8.dp))
+        }
+
+        if (isLoading) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator(color = AdminTheme.Primary)
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+                contentPadding = PaddingValues(bottom = 24.dp)
+            ) {
+                items(filtered, key = { it.id }) { destination ->
+                    TourListCard(
+                        destination = destination,
+                        isDeleting = isDeletingTourId?.toString() == destination.id,
+                        onEdit = { onEditTour(destination) },
+                        onDelete = { tourToDelete = destination }
+                    )
+                }
             }
         }
     }
@@ -125,6 +184,7 @@ fun AdminToursScreen(
 @Composable
 private fun TourListCard(
     destination: Destination,
+    isDeleting: Boolean,
     onEdit: () -> Unit,
     onDelete: () -> Unit
 ) {
@@ -140,8 +200,8 @@ private fun TourListCard(
                 .padding(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Image(
-                painter = painterResource(id = destination.imageRes),
+            DestinationImage(
+                destination = destination,
                 contentDescription = destination.name,
                 modifier = Modifier
                     .size(64.dp)
@@ -163,11 +223,19 @@ private fun TourListCard(
                     modifier = Modifier.padding(top = 2.dp)
                 )
             }
-            IconButton(onClick = onEdit) {
-                Icon(Icons.Default.Edit, contentDescription = "Edit", tint = AdminTheme.Primary)
-            }
-            IconButton(onClick = onDelete) {
-                Icon(Icons.Default.Delete, contentDescription = "Delete", tint = AdminTheme.Error)
+            if (isDeleting) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(24.dp),
+                    color = AdminTheme.Primary,
+                    strokeWidth = 2.dp
+                )
+            } else {
+                IconButton(onClick = onEdit) {
+                    Icon(Icons.Default.Edit, contentDescription = "Edit", tint = AdminTheme.Primary)
+                }
+                IconButton(onClick = onDelete) {
+                    Icon(Icons.Default.Delete, contentDescription = "Delete", tint = AdminTheme.Error)
+                }
             }
         }
     }
@@ -178,49 +246,39 @@ private fun TourListCard(
 fun AdminAddTourScreen(
     modifier: Modifier = Modifier,
     initialDestination: Destination?,
-    categoryNames: List<String>,
-    onCategoryAdded: (String) -> Unit,
+    categories: List<CategoryOption>,
+    imageCoverUrl: String?,
+    isSaving: Boolean = false,
+    isUploadingImage: Boolean = false,
+    errorMessage: String? = null,
     onBack: () -> Unit,
-    onSave: (Destination) -> Unit
+    onUploadImage: (Uri) -> Unit,
+    onSave: (TourFormData, Long?) -> Unit
 ) {
     val isEditMode = initialDestination != null
 
-    var name by remember { mutableStateOf(initialDestination?.name ?: "") }
-    var category by remember {
+    var name by remember(initialDestination) { mutableStateOf(initialDestination?.name ?: "") }
+    var selectedCategoryId by remember(initialDestination, categories) {
         mutableStateOf(
-            initialDestination?.category?.takeIf { it in categoryNames }
-                ?: categoryNames.firstOrNull()
-                ?: ""
+            initialDestination?.categoryId ?: categories.firstOrNull()?.id ?: 1L
         )
     }
-    var newCategoryName by remember(initialDestination, categoryNames) {
-        mutableStateOf(
-            if (initialDestination != null && initialDestination.category !in categoryNames) {
-                initialDestination.category
-            } else {
-                ""
-            }
-        )
-    }
-    var categoryMode by remember(initialDestination, categoryNames) {
-        mutableStateOf(
-            if (initialDestination != null && initialDestination.category !in categoryNames) {
-                CategoryInputMode.AddNew
-            } else {
-                CategoryInputMode.Select
-            }
-        )
-    }
-    var location by remember { mutableStateOf(initialDestination?.province ?: "") }
-    var duration by remember { mutableStateOf("8") }
-    var price by remember { mutableStateOf(initialDestination?.price?.toInt()?.toString() ?: "45") }
-    var description by remember { mutableStateOf(initialDestination?.description ?: "") }
-    var imageRes by remember { mutableStateOf(initialDestination?.imageRes ?: R.drawable.angkorwat1) }
+    var location by remember(initialDestination) { mutableStateOf(initialDestination?.province ?: "") }
+    var duration by remember(initialDestination) { mutableStateOf((initialDestination?.durationHours ?: 8).toString()) }
+    var maxPeople by remember(initialDestination) { mutableStateOf((initialDestination?.maxPeople ?: 20).toString()) }
+    var price by remember(initialDestination) { mutableStateOf(initialDestination?.price?.toString() ?: "45") }
+    var latitude by remember(initialDestination) { mutableStateOf(initialDestination?.latitude?.toString() ?: "0") }
+    var longitude by remember(initialDestination) { mutableStateOf(initialDestination?.longitude?.toString() ?: "0") }
+    var description by remember(initialDestination) { mutableStateOf(initialDestination?.description ?: "") }
+    var isActive by remember(initialDestination) { mutableStateOf(initialDestination?.isActive ?: true) }
     var categoryExpanded by remember { mutableStateOf(false) }
+
+    val selectedCategoryName = categories.find { it.id == selectedCategoryId }?.name.orEmpty()
+    val resolvedImageUrl = ApiConstants.resolveMediaUrl(imageCoverUrl ?: initialDestination?.imageUrl)
 
     val photoPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia()
-    ) { /* gallery pick — preview uses default drawable for now */ }
+    ) { uri -> uri?.let(onUploadImage) }
 
     Column(
         modifier = modifier
@@ -235,48 +293,50 @@ fun AdminAddTourScreen(
                 .height(200.dp)
                 .clip(RoundedCornerShape(16.dp))
         ) {
-            Image(
-                painter = painterResource(id = imageRes),
-                contentDescription = "Tour image",
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop
-            )
+            if (!resolvedImageUrl.isNullOrBlank()) {
+                AsyncImage(
+                    model = resolvedImageUrl,
+                    contentDescription = "Tour image",
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+            } else {
+                Image(
+                    painter = painterResource(id = initialDestination?.imageRes ?: R.drawable.angkorwat1),
+                    contentDescription = "Tour image",
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+            }
+            if (isUploadingImage) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = 0.4f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(color = Color.White)
+                }
+            }
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.25f)),
+                    .background(Color.Black.copy(alpha = 0.25f)),
                 contentAlignment = Alignment.Center
             ) {
-                Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    Surface(
-                        modifier = Modifier
-                            .size(48.dp)
-                            .clickable {
-                                photoPickerLauncher.launch(
-                                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                                )
-                            },
-                        shape = CircleShape,
-                        color = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.9f)
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(Icons.Default.PhotoCamera, contentDescription = "Camera", tint = AdminTheme.Primary)
-                        }
-                    }
-                    Surface(
-                        modifier = Modifier
-                            .size(48.dp)
-                            .clickable {
-                                photoPickerLauncher.launch(
-                                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                                )
-                            },
-                        shape = CircleShape,
-                        color = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.9f)
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(Icons.Default.Image, contentDescription = "Gallery", tint = AdminTheme.Primary)
-                        }
+                Surface(
+                    modifier = Modifier
+                        .size(48.dp)
+                        .clickable(enabled = !isUploadingImage) {
+                            photoPickerLauncher.launch(
+                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                            )
+                        },
+                    shape = CircleShape,
+                    color = Color.White.copy(alpha = 0.9f)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(Icons.Default.PhotoCamera, contentDescription = "Upload image", tint = AdminTheme.Primary)
                     }
                 }
             }
@@ -284,163 +344,127 @@ fun AdminAddTourScreen(
 
         Spacer(modifier = Modifier.height(20.dp))
 
-        Text("Tour Name", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = AdminTheme.TextSecondary)
-        Spacer(modifier = Modifier.height(6.dp))
         OutlinedTextField(
             value = name,
             onValueChange = { name = it },
-            placeholder = { Text("Enter tour name") },
+            label = { Text("Tour Name") },
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(12.dp),
             colors = adminFieldColors(),
             singleLine = true
         )
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(12.dp))
 
-        Text("Category", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = AdminTheme.TextSecondary)
-        Spacer(modifier = Modifier.height(8.dp))
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ExposedDropdownMenuBox(
+            expanded = categoryExpanded,
+            onExpandedChange = { categoryExpanded = it }
         ) {
-            FilterChip(
-                selected = categoryMode == CategoryInputMode.Select,
-                onClick = { categoryMode = CategoryInputMode.Select },
-                label = { Text("Select") },
-                leadingIcon = if (categoryMode == CategoryInputMode.Select) {
-                    { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp)) }
-                } else null,
-                colors = FilterChipDefaults.filterChipColors(
-                    selectedContainerColor = AdminTheme.PrimaryLight,
-                    selectedLabelColor = AdminTheme.Primary
-                )
+            OutlinedTextField(
+                value = selectedCategoryName,
+                onValueChange = {},
+                readOnly = true,
+                label = { Text("Category") },
+                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = categoryExpanded) },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .menuAnchor(),
+                shape = RoundedCornerShape(12.dp),
+                colors = adminFieldColors()
             )
-            FilterChip(
-                selected = categoryMode == CategoryInputMode.AddNew,
-                onClick = { categoryMode = CategoryInputMode.AddNew },
-                label = { Text("Add New") },
-                leadingIcon = if (categoryMode == CategoryInputMode.AddNew) {
-                    { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp)) }
-                } else null,
-                colors = FilterChipDefaults.filterChipColors(
-                    selectedContainerColor = AdminTheme.PrimaryLight,
-                    selectedLabelColor = AdminTheme.Primary
-                )
-            )
-        }
-
-        Spacer(modifier = Modifier.height(10.dp))
-
-        when (categoryMode) {
-            CategoryInputMode.Select -> {
-                ExposedDropdownMenuBox(
-                    expanded = categoryExpanded,
-                    onExpandedChange = { categoryExpanded = it }
-                ) {
-                    OutlinedTextField(
-                        value = category,
-                        onValueChange = {},
-                        readOnly = true,
-                        placeholder = { Text("Select category") },
-                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = categoryExpanded) },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .menuAnchor(),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = adminFieldColors()
-                    )
-                    ExposedDropdownMenu(
-                        expanded = categoryExpanded,
-                        onDismissRequest = { categoryExpanded = false }
-                    ) {
-                        categoryNames.forEach { option ->
-                            DropdownMenuItem(
-                                text = { Text(option) },
-                                onClick = {
-                                    category = option
-                                    categoryExpanded = false
-                                }
-                            )
+            ExposedDropdownMenu(
+                expanded = categoryExpanded,
+                onDismissRequest = { categoryExpanded = false }
+            ) {
+                categories.forEach { option ->
+                    DropdownMenuItem(
+                        text = { Text(option.name) },
+                        onClick = {
+                            selectedCategoryId = option.id
+                            categoryExpanded = false
                         }
-                    }
+                    )
                 }
             }
-
-            CategoryInputMode.AddNew -> {
-                OutlinedTextField(
-                    value = newCategoryName,
-                    onValueChange = { newCategoryName = it },
-                    placeholder = { Text("Enter new category name") },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = adminFieldColors(),
-                    singleLine = true,
-                    leadingIcon = {
-                        Icon(Icons.Default.Add, contentDescription = null, tint = AdminTheme.Primary)
-                    }
-                )
-            }
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(12.dp))
 
-        Text("Location", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = AdminTheme.TextSecondary)
-        Spacer(modifier = Modifier.height(6.dp))
         OutlinedTextField(
             value = location,
             onValueChange = { location = it },
-            placeholder = { Text("e.g. Siem Reap, Phnom Penh") },
+            label = { Text("Location") },
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(12.dp),
             colors = adminFieldColors(),
             singleLine = true,
-            leadingIcon = {
-                Icon(Icons.Default.LocationOn, contentDescription = null, tint = AdminTheme.Primary)
-            }
+            leadingIcon = { Icon(Icons.Default.LocationOn, contentDescription = null, tint = AdminTheme.Primary) }
         )
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(12.dp))
 
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text("Duration (Hours)", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = AdminTheme.TextSecondary)
-                Spacer(modifier = Modifier.height(6.dp))
-                OutlinedTextField(
-                    value = duration,
-                    onValueChange = { duration = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = adminFieldColors(),
-                    singleLine = true
-                )
-            }
-            Column(modifier = Modifier.weight(1f)) {
-                Text("Price ($)", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = AdminTheme.TextSecondary)
-                Spacer(modifier = Modifier.height(6.dp))
-                OutlinedTextField(
-                    value = price,
-                    onValueChange = { price = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = adminFieldColors(),
-                    singleLine = true
-                )
-            }
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            OutlinedTextField(
+                value = duration,
+                onValueChange = { duration = it },
+                label = { Text("Duration (h)") },
+                modifier = Modifier.weight(1f),
+                shape = RoundedCornerShape(12.dp),
+                colors = adminFieldColors(),
+                singleLine = true
+            )
+            OutlinedTextField(
+                value = maxPeople,
+                onValueChange = { maxPeople = it },
+                label = { Text("Max People") },
+                modifier = Modifier.weight(1f),
+                shape = RoundedCornerShape(12.dp),
+                colors = adminFieldColors(),
+                singleLine = true
+            )
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(12.dp))
 
-        Text("Description", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = AdminTheme.TextSecondary)
-        Spacer(modifier = Modifier.height(6.dp))
+        OutlinedTextField(
+            value = price,
+            onValueChange = { price = it },
+            label = { Text("Price ($)") },
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(12.dp),
+            colors = adminFieldColors(),
+            singleLine = true
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            OutlinedTextField(
+                value = latitude,
+                onValueChange = { latitude = it },
+                label = { Text("Latitude") },
+                modifier = Modifier.weight(1f),
+                shape = RoundedCornerShape(12.dp),
+                colors = adminFieldColors(),
+                singleLine = true
+            )
+            OutlinedTextField(
+                value = longitude,
+                onValueChange = { longitude = it },
+                label = { Text("Longitude") },
+                modifier = Modifier.weight(1f),
+                shape = RoundedCornerShape(12.dp),
+                colors = adminFieldColors(),
+                singleLine = true
+            )
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
         OutlinedTextField(
             value = description,
             onValueChange = { description = it },
-            placeholder = { Text("Enter description...") },
+            label = { Text("Description") },
             modifier = Modifier
                 .fillMaxWidth()
                 .heightIn(min = 120.dp),
@@ -449,58 +473,79 @@ fun AdminAddTourScreen(
             minLines = 4
         )
 
-        Spacer(modifier = Modifier.height(28.dp))
-
-        Button(
-            onClick = {
-                val finalCategory = when (categoryMode) {
-                    CategoryInputMode.Select -> category
-                    CategoryInputMode.AddNew -> newCategoryName.trim()
-                }
-
-                if (finalCategory.isBlank()) return@Button
-
-                if (categoryMode == CategoryInputMode.AddNew && finalCategory !in categoryNames) {
-                    onCategoryAdded(finalCategory)
-                }
-
-                val result = if (initialDestination != null) {
-                    initialDestination.copy(
-                        name = name,
-                        province = location.ifBlank { initialDestination.province },
-                        category = finalCategory,
-                        price = price.toDoubleOrNull() ?: initialDestination.price,
-                        description = description,
-                        imageRes = imageRes
+        if (isEditMode) {
+            Spacer(modifier = Modifier.height(12.dp))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(AdminTheme.Surface)
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text("Tour active", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                    Text(
+                        if (isActive) "Visible to users" else "Hidden from users",
+                        fontSize = 12.sp,
+                        color = AdminTheme.TextSecondary
                     )
+                }
+                Switch(
+                    checked = isActive,
+                    onCheckedChange = { isActive = it },
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = Color.White,
+                        checkedTrackColor = AdminTheme.Primary
+                    )
+                )
+            }
+        }
+
+        if (errorMessage != null) {
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(errorMessage, color = AdminTheme.Error, fontSize = 12.sp)
+        }
+
+        Spacer(modifier = Modifier.height(20.dp))
+
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(onClick = onBack, modifier = Modifier.weight(1f), shape = RoundedCornerShape(14.dp)) {
+                Text("Cancel")
+            }
+            Button(
+                onClick = {
+                    val imageCover = imageCoverUrl ?: initialDestination?.imageUrl.orEmpty()
+                    if (name.isBlank() || imageCover.isBlank()) return@Button
+                    onSave(
+                        TourFormData(
+                            title = name,
+                            description = description,
+                            location = location.ifBlank { "Cambodia" },
+                            latitude = latitude.toDoubleOrNull() ?: 0.0,
+                            longitude = longitude.toDoubleOrNull() ?: 0.0,
+                            price = price.toDoubleOrNull() ?: 0.0,
+                            categoryId = selectedCategoryId,
+                            durationHours = duration.toIntOrNull() ?: 1,
+                            maxPeople = maxPeople.toIntOrNull() ?: 1,
+                            imageCover = imageCover,
+                            isActive = isActive
+                        ),
+                        initialDestination?.id?.toLongOrNull()
+                    )
+                },
+                enabled = !isSaving && !isUploadingImage,
+                modifier = Modifier.weight(1f),
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = AdminTheme.Primary)
+            ) {
+                if (isSaving) {
+                    CircularProgressIndicator(color = Color.White, modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
                 } else {
-                    Destination(
-                        id = System.currentTimeMillis().toString(),
-                        name = name,
-                        province = location.ifBlank { "Cambodia" },
-                        category = finalCategory,
-                        price = price.toDoubleOrNull() ?: 0.0,
-                        rating = 4.5,
-                        imageRes = imageRes,
-                        description = description
-                    )
+                    Text(if (isEditMode) "Update Tour" else "Save Tour", fontWeight = FontWeight.SemiBold)
                 }
-                onSave(result)
-            },
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(52.dp),
-            shape = RoundedCornerShape(14.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = AdminTheme.Primary,
-                contentColor = androidx.compose.ui.graphics.Color.White
-            )
-        ) {
-            Text(
-                text = if (isEditMode) "Update Tour" else "Save Tour",
-                fontSize = 16.sp,
-                fontWeight = FontWeight.SemiBold
-            )
+            }
         }
 
         Spacer(modifier = Modifier.height(24.dp))

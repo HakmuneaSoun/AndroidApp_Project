@@ -1,15 +1,21 @@
 package com.example.final_project.navigation
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.toMutableStateList
+import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.final_project.domain.model.BookingDraft
 import com.example.final_project.domain.model.PaymentMethod
-import com.example.final_project.domain.model.mockDestinations
 import com.example.final_project.domain.model.mockUserNotifications
+import com.example.final_project.presentation.booking.BookingViewModel
+import com.example.final_project.presentation.booking.BookingViewModelFactory
+import com.example.final_project.presentation.reviews.ReviewsViewModel
+import com.example.final_project.presentation.reviews.ReviewsViewModelFactory
 import com.example.final_project.presentation.admin.AdminDashboardScreen
 import com.example.final_project.presentation.auth.login.LoginScreen
 import com.example.final_project.presentation.auth.register.RegisterScreen
@@ -17,12 +23,16 @@ import com.example.final_project.presentation.booking.BookingScreen
 import com.example.final_project.presentation.booking.PaymentScreen
 import com.example.final_project.presentation.detail.DetailScreen
 import com.example.final_project.presentation.favorite.FavoriteScreen
+import com.example.final_project.presentation.favorite.FavoritesViewModel
+import com.example.final_project.presentation.favorite.FavoritesViewModelFactory
 import com.example.final_project.presentation.home.HomeScreen
 import com.example.final_project.presentation.notifications.NotificationStyle
 import com.example.final_project.presentation.notifications.NotificationsScreen
 import com.example.final_project.presentation.profile.ProfileScreen
 import com.example.final_project.presentation.search.SearchScreen
 import com.example.final_project.presentation.splash.SplashScreen
+import com.example.final_project.presentation.tours.ToursViewModel
+import com.example.final_project.presentation.tours.ToursViewModelFactory
 
 sealed class Screen(val route: String) {
     object Splash : Screen("splash")
@@ -102,6 +112,21 @@ fun rememberNavigationState(): NavigationState {
 
 @Composable
 fun AppNavigation(navState: NavigationState = rememberNavigationState()) {
+    val context = LocalContext.current
+    val toursViewModel: ToursViewModel = viewModel(
+        factory = ToursViewModelFactory(context.applicationContext as android.app.Application)
+    )
+    val favoritesViewModel: FavoritesViewModel = viewModel(
+        factory = FavoritesViewModelFactory(context.applicationContext as android.app.Application)
+    )
+    val bookingViewModel: BookingViewModel = viewModel(
+        factory = BookingViewModelFactory(context.applicationContext as android.app.Application)
+    )
+    val reviewsViewModel: ReviewsViewModel = viewModel(
+        factory = ReviewsViewModelFactory(context.applicationContext as android.app.Application)
+    )
+    val toursState = toursViewModel.uiState
+    val bookingFlowState = bookingViewModel.uiState
     val userNotifications = remember { mockUserNotifications.toMutableStateList() }
 
     fun navigateToTab(tab: BottomNavItem) {
@@ -147,7 +172,7 @@ fun AppNavigation(navState: NavigationState = rememberNavigationState()) {
         Screen.Register -> {
             RegisterScreen(
                 onNavigateToLogin = { navState.navigateTo(Screen.Login) },
-                onRegisterSuccess = { navState.navigateTo(Screen.Home) }
+                onRegisterSuccess = { navState.navigateTo(Screen.Login) }
             )
         }
 
@@ -163,6 +188,8 @@ fun AppNavigation(navState: NavigationState = rememberNavigationState()) {
 
         Screen.Home -> {
             HomeScreen(
+                destinations = toursState.tours.filter { it.isActive },
+                isLoading = toursState.isLoading,
                 onDestinationClick = { destinationId ->
                     navState.navigateTo(Screen.Detail, destinationId)
                 },
@@ -177,12 +204,18 @@ fun AppNavigation(navState: NavigationState = rememberNavigationState()) {
 
         Screen.Detail -> {
             DetailScreen(
-                destinationId = navState.selectedDestinationId.ifEmpty { "1" },
+                destinationId = navState.selectedDestinationId.ifEmpty { toursState.tours.firstOrNull()?.id ?: "1" },
+                toursViewModel = toursViewModel,
+                favoritesViewModel = favoritesViewModel,
+                reviewsViewModel = reviewsViewModel,
                 onNavigateBack = { navState.navigateBack() },
                 onNavigateToDestination = { destinationId ->
                     navState.navigateTo(Screen.Detail, destinationId)
                 },
-                onBookNow = { navState.startBooking(navState.selectedDestinationId.ifEmpty { "1" }) },
+                onBookNow = {
+                    bookingViewModel.resetFlow()
+                    navState.startBooking(navState.selectedDestinationId.ifEmpty { "1" })
+                },
                 selectedTab = selectedTabForScreen(),
                 onTabSelected = ::navigateToTab
             )
@@ -190,39 +223,64 @@ fun AppNavigation(navState: NavigationState = rememberNavigationState()) {
 
         Screen.Booking -> {
             val draft = navState.bookingDraft
-            val destination = mockDestinations.find {
+            val destination = toursState.tours.find {
                 it.id == (draft?.destinationId ?: navState.selectedDestinationId)
-            } ?: mockDestinations.first()
+            } ?: toursState.tours.firstOrNull()
 
-            if (draft != null) {
+            LaunchedEffect(bookingFlowState.createdBooking?.id) {
+                if (bookingFlowState.createdBooking != null && navState.currentScreen == Screen.Booking) {
+                    navState.navigateTo(Screen.Payment)
+                }
+            }
+
+            if (draft != null && destination != null) {
                 BookingScreen(
                     destination = destination,
                     booking = draft,
+                    isSubmitting = bookingFlowState.isSubmittingBooking,
+                    errorMessage = bookingFlowState.errorMessage,
                     onBookingChange = { navState.updateBooking(it) },
-                    onNavigateBack = { navState.navigateBack() },
-                    onContinueToPayment = { navState.navigateTo(Screen.Payment) }
+                    onNavigateBack = {
+                        bookingViewModel.resetFlow()
+                        navState.navigateBack()
+                    },
+                    onContinueToPayment = {
+                        val tourId = destination.id.toLongOrNull() ?: return@BookingScreen
+                        bookingViewModel.createBooking(tourId, draft.tourDate, draft.travelers)
+                    },
+                    onClearError = { bookingViewModel.clearError() }
                 )
             }
         }
 
         Screen.Payment -> {
-            val draft = navState.bookingDraft
-            val destination = mockDestinations.find {
-                it.id == (draft?.destinationId ?: navState.selectedDestinationId)
-            } ?: mockDestinations.first()
-            val total = draft?.totalPrice(destination.price) ?: destination.price
+            val createdBooking = bookingFlowState.createdBooking
 
-            PaymentScreen(
-                totalAmount = total,
-                selectedMethod = navState.selectedPaymentMethod,
-                onMethodChange = { navState.updatePaymentMethod(it) },
-                onNavigateBack = { navState.navigateBack() },
-                onPayNow = { navState.navigateTo(Screen.Search) }
-            )
+            if (createdBooking != null) {
+                PaymentScreen(
+                    booking = createdBooking,
+                    selectedMethod = navState.selectedPaymentMethod,
+                    isProcessing = bookingFlowState.isProcessingPayment,
+                    errorMessage = bookingFlowState.errorMessage,
+                    onMethodChange = { navState.updatePaymentMethod(it) },
+                    onNavigateBack = { navState.navigateBack() },
+                    onPayNow = {
+                        bookingViewModel.processPayment(navState.selectedPaymentMethod)
+                    },
+                    paymentSuccess = bookingFlowState.paymentSuccess,
+                    onPaymentSuccessDismiss = {
+                        bookingViewModel.clearPaymentSuccess()
+                        bookingViewModel.resetFlow()
+                        navState.navigateTo(Screen.Home)
+                    }
+                )
+            }
         }
 
         Screen.Search -> {
             SearchScreen(
+                destinations = toursState.tours.filter { it.isActive },
+                isLoading = toursState.isLoading,
                 onDestinationClick = { destinationId ->
                     navState.navigateTo(Screen.Detail, destinationId)
                 },
@@ -239,7 +297,8 @@ fun AppNavigation(navState: NavigationState = rememberNavigationState()) {
                 },
                 onNavigateBack = { navigateToTab(BottomNavItem.Home) },
                 selectedTab = selectedTabForScreen(),
-                onTabSelected = ::navigateToTab
+                onTabSelected = ::navigateToTab,
+                viewModel = favoritesViewModel
             )
         }
 

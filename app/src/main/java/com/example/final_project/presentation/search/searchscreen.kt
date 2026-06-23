@@ -34,9 +34,9 @@ import coil.compose.AsyncImage
 import androidx.compose.foundation.Image
 import androidx.compose.ui.res.painterResource
 import com.example.final_project.domain.model.Destination
-import com.example.final_project.domain.model.mockDestinations
 import com.example.final_project.navigation.AppBottomBar
 import com.example.final_project.navigation.BottomNavItem
+import com.example.final_project.presentation.common.DestinationImage
 
 // ── Tokens ────────────────────────────────────────────────────────────────────
 private val Accent      = Color(0xFF667eea)
@@ -70,6 +70,8 @@ private val trending = listOf("Angkor Wat", "Koh Rong", "Phnom Penh", "Kampot", 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SearchScreen(
+    destinations: List<Destination> = emptyList(),
+    isLoading: Boolean = false,
     onDestinationClick: (String) -> Unit,
     onNavigateBack: () -> Unit,
     selectedTab: BottomNavItem = BottomNavItem.Explore,
@@ -83,7 +85,7 @@ fun SearchScreen(
     var minRating       by remember { mutableStateOf(0f) }
     var maxPrice        by remember { mutableStateOf(500f) }
 
-    val baseResults = mockDestinations.filter {
+    val baseResults = destinations.filter {
         (searchQuery.isEmpty() ||
                 it.name.contains(searchQuery, ignoreCase = true) ||
                 it.province.contains(searchQuery, ignoreCase = true) ||
@@ -516,8 +518,8 @@ fun SearchResultCard(
                     .size(86.dp)
                     .clip(RoundedCornerShape(14.dp))
             ) {
-                Image(
-                    painter = painterResource(id = destination.imageRes),
+                DestinationImage(
+                    destination = destination,
                     contentDescription = destination.name,
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop

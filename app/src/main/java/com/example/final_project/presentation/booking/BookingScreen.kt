@@ -1,6 +1,5 @@
 package com.example.final_project.presentation.booking
 
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -17,12 +16,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.final_project.domain.model.BookingDraft
 import com.example.final_project.domain.model.Destination
+import com.example.final_project.presentation.common.DestinationImage
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Locale
 
 private val ScreenBg = Color(0xFFF8F9FC)
 private val TextPrimary = Color(0xFF1A1A2E)
@@ -34,15 +36,17 @@ private val ActionGreen = Color(0xFF16A34A)
 fun BookingScreen(
     destination: Destination,
     booking: BookingDraft,
+    isSubmitting: Boolean,
+    errorMessage: String?,
     onBookingChange: (BookingDraft) -> Unit,
     onNavigateBack: () -> Unit,
-    onContinueToPayment: () -> Unit
+    onContinueToPayment: () -> Unit,
+    onClearError: () -> Unit
 ) {
     var showDateDialog by remember { mutableStateOf(false) }
     var showTravelersDialog by remember { mutableStateOf(false) }
-    var showPickupDialog by remember { mutableStateOf(false) }
 
-    val totalPrice = booking.totalPrice(destination.price)
+    val estimatedTotal = booking.totalPrice(destination.price)
 
     Scaffold(
         topBar = {
@@ -85,8 +89,8 @@ fun BookingScreen(
                             .padding(14.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Image(
-                            painter = painterResource(id = destination.imageRes),
+                        DestinationImage(
+                            destination = destination,
                             contentDescription = destination.name,
                             modifier = Modifier
                                 .size(72.dp)
@@ -96,13 +100,13 @@ fun BookingScreen(
                         Spacer(modifier = Modifier.width(14.dp))
                         Column {
                             Text(
-                                text = "${destination.name} Full Day Tour",
+                                text = destination.name,
                                 fontSize = 15.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = TextPrimary
                             )
                             Text(
-                                text = "$${destination.price.toInt()} / Person",
+                                text = "$${String.format("%.2f", destination.price)} / person",
                                 fontSize = 13.sp,
                                 color = TextSecondary,
                                 modifier = Modifier.padding(top = 4.dp)
@@ -114,22 +118,25 @@ fun BookingScreen(
                 Spacer(modifier = Modifier.height(20.dp))
 
                 BookingOptionRow(
-                    label = "Date",
-                    value = booking.date,
+                    label = "Tour Date",
+                    value = formatDisplayDate(booking.tourDate),
                     onClick = { showDateDialog = true }
                 )
                 Spacer(modifier = Modifier.height(12.dp))
                 BookingOptionRow(
                     label = "Travelers",
-                    value = "${booking.travelers} Adults",
+                    value = "${booking.travelers} ${if (booking.travelers == 1) "Person" else "People"}",
                     onClick = { showTravelersDialog = true }
                 )
-                Spacer(modifier = Modifier.height(12.dp))
-                BookingOptionRow(
-                    label = "Pick-up Location",
-                    value = booking.pickupLocation,
-                    onClick = { showPickupDialog = true }
-                )
+
+                if (errorMessage != null) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        text = errorMessage,
+                        color = Color(0xFFE53935),
+                        fontSize = 13.sp
+                    )
+                }
             }
 
             Column(
@@ -143,9 +150,9 @@ fun BookingScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text("Total Price", fontSize = 15.sp, color = TextSecondary)
+                    Text("Estimated Total", fontSize = 15.sp, color = TextSecondary)
                     Text(
-                        text = "$${totalPrice.toInt()}",
+                        text = "$${String.format("%.2f", estimatedTotal)}",
                         fontSize = 28.sp,
                         fontWeight = FontWeight.Bold,
                         color = TextPrimary
@@ -153,7 +160,11 @@ fun BookingScreen(
                 }
                 Spacer(modifier = Modifier.height(14.dp))
                 Button(
-                    onClick = onContinueToPayment,
+                    onClick = {
+                        onClearError()
+                        onContinueToPayment()
+                    },
+                    enabled = !isSubmitting,
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(52.dp),
@@ -163,20 +174,31 @@ fun BookingScreen(
                         contentColor = Color.White
                     )
                 ) {
-                    Text("Continue to Payment", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                    if (isSubmitting) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(22.dp),
+                            color = Color.White,
+                            strokeWidth = 2.dp
+                        )
+                    } else {
+                        Text("Continue to Payment", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                    }
                 }
             }
         }
     }
 
     if (showDateDialog) {
-        val dates = listOf("25 May 2024", "26 May 2024", "27 May 2024", "28 May 2024")
+        val dates = remember { generateTourDates(30) }
         SelectionDialog(
-            title = "Select Date",
-            options = dates,
-            selected = booking.date,
-            onSelect = {
-                onBookingChange(booking.copy(date = it))
+            title = "Select Tour Date",
+            options = dates.map { formatDisplayDate(it) },
+            selected = formatDisplayDate(booking.tourDate),
+            onSelect = { display ->
+                val index = dates.indexOfFirst { formatDisplayDate(it) == display }
+                if (index >= 0) {
+                    onBookingChange(booking.copy(tourDate = dates[index]))
+                }
                 showDateDialog = false
             },
             onDismiss = { showDateDialog = false }
@@ -184,11 +206,14 @@ fun BookingScreen(
     }
 
     if (showTravelersDialog) {
-        val options = (1..6).map { "$it Adults" }
+        val maxPeople = destination.maxPeople.coerceAtLeast(1)
+        val options = (1..maxPeople).map {
+            "$it ${if (it == 1) "Person" else "People"}"
+        }
         SelectionDialog(
             title = "Number of Travelers",
             options = options,
-            selected = "${booking.travelers} Adults",
+            selected = "${booking.travelers} ${if (booking.travelers == 1) "Person" else "People"}",
             onSelect = {
                 val count = it.substringBefore(" ").toIntOrNull() ?: booking.travelers
                 onBookingChange(booking.copy(travelers = count))
@@ -197,24 +222,26 @@ fun BookingScreen(
             onDismiss = { showTravelersDialog = false }
         )
     }
+}
 
-    if (showPickupDialog) {
-        val locations = listOf(
-            "Your Hotel in Phnom Penh",
-            "Siem Reap Airport",
-            "Phnom Penh Airport",
-            "Central Market, Phnom Penh"
-        )
-        SelectionDialog(
-            title = "Pick-up Location",
-            options = locations,
-            selected = booking.pickupLocation,
-            onSelect = {
-                onBookingChange(booking.copy(pickupLocation = it))
-                showPickupDialog = false
-            },
-            onDismiss = { showPickupDialog = false }
-        )
+private fun generateTourDates(days: Int): List<String> {
+    val formatter = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+    val calendar = Calendar.getInstance()
+    return (0 until days).map { offset ->
+        val day = calendar.clone() as Calendar
+        day.add(Calendar.DAY_OF_MONTH, offset)
+        formatter.format(day.time)
+    }
+}
+
+private fun formatDisplayDate(isoDate: String): String {
+    return try {
+        val parser = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+        val display = SimpleDateFormat("dd MMM yyyy", Locale.US)
+        val date = parser.parse(isoDate)
+        if (date != null) display.format(date) else isoDate
+    } catch (_: Exception) {
+        isoDate
     }
 }
 

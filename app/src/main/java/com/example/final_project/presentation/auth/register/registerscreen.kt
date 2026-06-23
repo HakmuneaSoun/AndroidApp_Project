@@ -33,6 +33,10 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.final_project.presentation.auth.AuthViewModel
+import com.example.final_project.presentation.auth.AuthViewModelFactory
 
 // ── Tokens ─────────────────────────────────────────────────────────────────────
 private val Purple900  = Color(0xFF2D1B69)
@@ -74,6 +78,12 @@ fun RegisterScreen(
     onNavigateToLogin: () -> Unit,
     onRegisterSuccess: () -> Unit
 ) {
+    val context = LocalContext.current
+    val viewModel: AuthViewModel = viewModel(
+        factory = AuthViewModelFactory(context.applicationContext as android.app.Application)
+    )
+    val authState = viewModel.uiState
+
     // Form state
     var fullName        by remember { mutableStateOf("") }
     var email           by remember { mutableStateOf("") }
@@ -83,7 +93,15 @@ fun RegisterScreen(
     var passwordVisible by remember { mutableStateOf(false) }
     var confirmVisible  by remember { mutableStateOf(false) }
     var agreeTerms      by remember { mutableStateOf(false) }
-    var isLoading       by remember { mutableStateOf(false) }
+    val isLoading = authState.isLoading
+    val apiError = authState.errorMessage
+
+    LaunchedEffect(authState.registerSuccess) {
+        if (authState.registerSuccess) {
+            onRegisterSuccess()
+            viewModel.clearRegisterSuccess()
+        }
+    }
 
     // Validation
     val nameError    = fullName.isNotEmpty() && fullName.length < 2
@@ -492,12 +510,31 @@ fun RegisterScreen(
 
             Spacer(modifier = Modifier.height(20.dp))
 
+            if (apiError != null) {
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    color = ErrorRed.copy(alpha = 0.08f)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Default.ErrorOutline, null,
+                            tint = ErrorRed, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(apiError, fontSize = 12.sp, color = ErrorRed)
+                    }
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+            }
+
             // Register button
             Button(
                 onClick = {
                     if (formValid) {
-                        isLoading = true
-                        onRegisterSuccess()
+                        viewModel.clearError()
+                        viewModel.register(fullName, email, password, confirmPassword)
                     }
                 },
                 enabled = formValid && !isLoading,

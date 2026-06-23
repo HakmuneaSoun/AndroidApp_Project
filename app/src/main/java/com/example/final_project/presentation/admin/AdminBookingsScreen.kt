@@ -4,10 +4,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Tour
 import androidx.compose.material3.*
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.runtime.*
@@ -15,28 +15,35 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.final_project.domain.model.AdminBooking
-import com.example.final_project.domain.model.BookingStatus
-import com.example.final_project.domain.model.mockAdminBookings
 
-private val bookingTabs = listOf("All", "Upcoming", "Completed", "Cancelled")
+private val bookingTabs = listOf("All", "Pending", "Confirmed", "Completed", "Cancelled")
 
 @Composable
 fun AdminBookingsScreen(
     modifier: Modifier = Modifier,
-    bookings: List<AdminBooking> = mockAdminBookings
+    viewModel: AdminBookingsViewModel = viewModel(
+        factory = AdminBookingsViewModelFactory(
+            LocalContext.current.applicationContext as android.app.Application
+        )
+    )
 ) {
+    val uiState = viewModel.uiState
     var selectedTab by remember { mutableStateOf("All") }
+    var showMenuForBookingId by remember { mutableStateOf<Long?>(null) }
 
-    val filteredBookings = remember(selectedTab, bookings) {
+    val filteredBookings = remember(selectedTab, uiState.bookings) {
         when (selectedTab) {
-            "Upcoming" -> bookings.filter { it.status == BookingStatus.Upcoming }
-            "Completed" -> bookings.filter { it.status == BookingStatus.Completed }
-            "Cancelled" -> bookings.filter { it.status == BookingStatus.Cancelled }
-            else -> bookings
+            "Pending" -> uiState.bookings.filter { it.status.equals("PENDING", ignoreCase = true) }
+            "Confirmed" -> uiState.bookings.filter { it.status.equals("CONFIRMED", ignoreCase = true) }
+            "Completed" -> uiState.bookings.filter { it.status.equals("COMPLETED", ignoreCase = true) }
+            "Cancelled" -> uiState.bookings.filter { it.status.equals("CANCELLED", ignoreCase = true) }
+            else -> uiState.bookings
         }
     }
 
@@ -67,7 +74,10 @@ fun AdminBookingsScreen(
             bookingTabs.forEach { tab ->
                 Tab(
                     selected = selectedTab == tab,
-                    onClick = { selectedTab = tab },
+                    onClick = {
+                        selectedTab = tab
+                        viewModel.clearMessages()
+                    },
                     text = {
                         Text(
                             text = tab,
@@ -81,20 +91,79 @@ fun AdminBookingsScreen(
             }
         }
 
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            items(filteredBookings, key = { it.id }) { booking ->
-                BookingCard(booking = booking)
+        if (uiState.errorMessage != null) {
+            Text(
+                text = uiState.errorMessage,
+                fontSize = 12.sp,
+                color = AdminTheme.Error,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+            )
+        }
+
+        if (uiState.successMessage != null) {
+            Text(
+                text = uiState.successMessage,
+                fontSize = 12.sp,
+                color = Color(0xFF4CAF50),
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+            )
+        }
+
+        if (uiState.isLoading) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator(color = AdminTheme.Primary)
+            }
+        } else if (filteredBookings.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                contentAlignment = Alignment.Center
+            ) {
+                Text("No bookings found", color = AdminTheme.TextSecondary, fontSize = 14.sp)
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                contentPadding = PaddingValues(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                items(filteredBookings, key = { it.id }) { booking ->
+                    BookingCard(
+                        booking = booking,
+                        isUpdating = uiState.isUpdatingBookingId == booking.id,
+                        showMenu = showMenuForBookingId == booking.id,
+                        onMenuClick = {
+                            showMenuForBookingId = if (showMenuForBookingId == booking.id) null else booking.id
+                        },
+                        onDismissMenu = { showMenuForBookingId = null },
+                        onStatusChange = { status ->
+                            showMenuForBookingId = null
+                            viewModel.updateBookingStatus(booking.id, status)
+                        }
+                    )
+                }
             }
         }
     }
 }
 
 @Composable
-private fun BookingCard(booking: AdminBooking) {
+private fun BookingCard(
+    booking: AdminBooking,
+    isUpdating: Boolean,
+    showMenu: Boolean,
+    onMenuClick: () -> Unit,
+    onDismissMenu: () -> Unit,
+    onStatusChange: (String) -> Unit
+) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
@@ -107,22 +176,22 @@ private fun BookingCard(booking: AdminBooking) {
                 .padding(14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Surface(
-                modifier = Modifier.size(48.dp),
-                shape = RoundedCornerShape(12.dp),
-                color = AdminTheme.PrimaryLight
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        Icons.Default.Tour,
-                        contentDescription = null,
-                        tint = AdminTheme.Primary,
-                        modifier = Modifier.size(24.dp)
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.width(12.dp))
+//            Surface(
+//                modifier = Modifier.size(48.dp),
+//                shape = RoundedCornerShape(12.dp),
+//                color = AdminTheme.PrimaryLight
+//            ) {
+//                Box(contentAlignment = Alignment.Center) {
+//                    Icon(
+//                        Icons.Default.Tour,
+//                        contentDescription = null,
+//                        tint = AdminTheme.Primary,
+//                        modifier = Modifier.size(24.dp)
+//                    )
+//                }
+//            }
+//
+//            Spacer(modifier = Modifier.width(12.dp))
 
             Column(modifier = Modifier.weight(1f)) {
                 Text(
@@ -137,6 +206,14 @@ private fun BookingCard(booking: AdminBooking) {
                     color = AdminTheme.TextSecondary,
                     modifier = Modifier.padding(top = 2.dp)
                 )
+                if (booking.bookingCode.isNotBlank()) {
+                    Text(
+                        text = booking.bookingCode,
+                        fontSize = 11.sp,
+                        color = AdminTheme.TextSecondary,
+                        modifier = Modifier.padding(top = 2.dp)
+                    )
+                }
                 Text(
                     text = "${booking.date} • ${booking.people} People",
                     fontSize = 12.sp,
@@ -147,22 +224,59 @@ private fun BookingCard(booking: AdminBooking) {
                 BookingStatusBadge(status = booking.status)
             }
 
-            Text(
-                text = "$${booking.price.toInt()}",
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold,
-                color = AdminTheme.TextPrimary
-            )
+            Column(horizontalAlignment = Alignment.End) {
+                Text(
+                    text = "$${String.format("%,.2f", booking.price)}",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = AdminTheme.TextPrimary
+                )
+
+                if (isUpdating) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        color = AdminTheme.Primary,
+                        strokeWidth = 2.dp
+                    )
+                } else {
+                    Box {
+                        IconButton(onClick = onMenuClick) {
+                            Icon(
+                                Icons.Default.MoreVert,
+                                contentDescription = "Change status",
+                                tint = AdminTheme.TextSecondary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        DropdownMenu(
+                            expanded = showMenu,
+                            onDismissRequest = onDismissMenu
+                        ) {
+                            bookingStatusOptions.forEach { status ->
+                                if (!status.equals(booking.status, ignoreCase = true)) {
+                                    DropdownMenuItem(
+                                        text = { Text(formatStatusLabel(status)) },
+                                        onClick = { onStatusChange(status) }
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }
 
 @Composable
-private fun BookingStatusBadge(status: BookingStatus) {
-    val (label, bg, fg) = when (status) {
-        BookingStatus.Upcoming -> Triple("Upcoming", AdminTheme.PrimaryLight, AdminTheme.Primary)
-        BookingStatus.Completed -> Triple("Completed", Color(0xFFF3F4F6), AdminTheme.TextSecondary)
-        BookingStatus.Cancelled -> Triple("Cancelled", Color(0xFFFFEBEE), AdminTheme.Error)
+private fun BookingStatusBadge(status: String) {
+    val (label, bg, fg) = when (status.uppercase()) {
+        "PENDING" -> Triple("Pending", Color(0xFFFFF3E0), Color(0xFFE65100))
+        "CONFIRMED" -> Triple("Confirmed", AdminTheme.PrimaryLight, AdminTheme.Primary)
+        "COMPLETED" -> Triple("Completed", Color(0xFFE8F5E9), Color(0xFF2E7D32))
+        "CANCELLED" -> Triple("Cancelled", Color(0xFFFFEBEE), AdminTheme.Error)
+        else -> Triple(formatStatusLabel(status), Color(0xFFF3F4F6), AdminTheme.TextSecondary)
     }
 
     Surface(
@@ -177,4 +291,8 @@ private fun BookingStatusBadge(status: BookingStatus) {
             modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
         )
     }
+}
+
+private fun formatStatusLabel(status: String): String {
+    return status.lowercase().replaceFirstChar { it.uppercase() }
 }

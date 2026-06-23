@@ -8,11 +8,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
 import com.example.final_project.navigation.AppNavigation
+import com.example.final_project.data.remote.RetrofitClient
 import com.example.final_project.ui.theme.Final_ProjectTheme
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        RetrofitClient.init(applicationContext)
         setContent {
             Final_ProjectTheme {
                 Surface(

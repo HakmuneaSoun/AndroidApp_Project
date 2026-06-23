@@ -38,10 +38,12 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import androidx.compose.foundation.Image
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.final_project.domain.model.Destination
-import com.example.final_project.domain.model.mockDestinations
 import com.example.final_project.navigation.AppBottomBar
 import com.example.final_project.navigation.BottomNavItem
+import com.example.final_project.presentation.common.DestinationImage
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -67,10 +69,15 @@ fun FavoriteScreen(
     onDestinationClick: (String) -> Unit,
     onNavigateBack: () -> Unit,
     selectedTab: BottomNavItem = BottomNavItem.Favorites,
-    onTabSelected: (BottomNavItem) -> Unit = {}
+    onTabSelected: (BottomNavItem) -> Unit = {},
+    viewModel: FavoritesViewModel = viewModel(
+        factory = FavoritesViewModelFactory(
+            LocalContext.current.applicationContext as android.app.Application
+        )
+    )
 ) {
-    // Start with the first 6 mock destinations as favorites
-    var favorites by remember { mutableStateOf(mockDestinations.take(6)) }
+    val uiState = viewModel.uiState
+    val favorites = uiState.favorites
 
     var selectedCategory by remember { mutableStateOf<String?>(null) }
     var selectedSort by remember { mutableStateOf(SortOption.Default) }
@@ -178,7 +185,16 @@ fun FavoriteScreen(
             AppBottomBar(selectedItem = selectedTab, onItemSelected = onTabSelected)
         }
     ) { paddingValues ->
-        if (favorites.isEmpty()) {
+        if (uiState.isLoading) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator(color = AccentColor)
+            }
+        } else if (favorites.isEmpty()) {
             EmptyFavoritesView(modifier = Modifier.padding(paddingValues))
         } else {
             LazyColumn(
@@ -190,6 +206,14 @@ fun FavoriteScreen(
             ) {
                 // Stats banner
                 item {
+                    if (uiState.errorMessage != null) {
+                        Text(
+                            text = uiState.errorMessage,
+                            fontSize = 12.sp,
+                            color = Color(0xFFE53935),
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                        )
+                    }
                     FavoritesStatsBanner(
                         count = favorites.size,
                         avgRating = avgRating,
@@ -270,7 +294,9 @@ fun FavoriteScreen(
                             items(displayList, key = { it.id }) { destination ->
                                 GridFavoriteItem(
                                     destination = destination,
-                                    onRemove = { favorites = favorites.filter { it.id != destination.id } },
+                                    onRemove = {
+                                        destination.id.toLongOrNull()?.let { viewModel.removeFavorite(it) }
+                                    },
                                     onClick = { onDestinationClick(destination.id) }
                                 )
                             }
@@ -285,7 +311,9 @@ fun FavoriteScreen(
                         ) {
                             FavoriteItem(
                                 destination = destination,
-                                onRemove = { favorites = favorites.filter { it.id != destination.id } },
+                                onRemove = {
+                                    destination.id.toLongOrNull()?.let { viewModel.removeFavorite(it) }
+                                },
                                 onClick = { onDestinationClick(destination.id) },
                                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
                             )
@@ -382,8 +410,8 @@ fun FavoriteItem(
                     .height(190.dp)
                     .clip(RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp))
             ) {
-                Image(
-                    painter = painterResource(id = destination.imageRes),
+                DestinationImage(
+                    destination = destination,
                     contentDescription = destination.name,
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop
@@ -560,8 +588,8 @@ fun GridFavoriteItem(
         colors = CardDefaults.cardColors(containerColor = Color.White)
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
-            Image(
-                painter = painterResource(id = destination.imageRes),
+            DestinationImage(
+                destination = destination,
                 contentDescription = destination.name,
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop
