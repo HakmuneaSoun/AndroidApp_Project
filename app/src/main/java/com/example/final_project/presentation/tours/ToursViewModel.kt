@@ -9,7 +9,6 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import com.example.final_project.data.local.SessionManager
 import com.example.final_project.data.mapper.extractCategoriesFromTours
 import com.example.final_project.data.mapper.toDestination
 import com.example.final_project.data.mapper.toDestinations
@@ -56,15 +55,11 @@ class ToursViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = TourRepository(
         tourApi = RetrofitClient.tourApi,
         fileApi = RetrofitClient.fileApi,
-        sessionManager = SessionManager(application)
+        sessionManager = RetrofitClient.getSessionManager()
     )
 
     var uiState by mutableStateOf(ToursUiState())
         private set
-
-    init {
-        loadTours()
-    }
 
     fun loadTours() {
         viewModelScope.launch {

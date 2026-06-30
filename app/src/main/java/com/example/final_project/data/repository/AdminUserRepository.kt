@@ -2,6 +2,7 @@ package com.example.final_project.data.repository
 
 import com.example.final_project.data.local.SessionManager
 import com.example.final_project.data.remote.AdminApiService
+import com.example.final_project.data.remote.ApiConstants
 import com.example.final_project.data.remote.dto.UpdateUserStatusRequest
 import com.example.final_project.data.remote.dto.UserProfileData
 import retrofit2.HttpException
@@ -24,7 +25,7 @@ class AdminUserRepository(
         } catch (e: HttpException) {
             AuthResult.Error(parseHttpError(e))
         } catch (e: IOException) {
-            AuthResult.Error("Network error. Check your connection and server URL.")
+            AuthResult.Error(ApiConstants.connectionErrorMessage())
         } catch (e: Exception) {
             AuthResult.Error(e.message ?: "Something went wrong")
         }
@@ -45,7 +46,7 @@ class AdminUserRepository(
         } catch (e: HttpException) {
             AuthResult.Error(parseHttpError(e))
         } catch (e: IOException) {
-            AuthResult.Error("Network error. Check your connection and server URL.")
+            AuthResult.Error(ApiConstants.connectionErrorMessage())
         } catch (e: Exception) {
             AuthResult.Error(e.message ?: "Something went wrong")
         }

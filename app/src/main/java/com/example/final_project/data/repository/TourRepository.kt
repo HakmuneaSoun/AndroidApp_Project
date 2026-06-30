@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.Uri
 import com.example.final_project.data.local.SessionManager
 import com.example.final_project.data.remote.FileApiService
+import com.example.final_project.data.remote.ApiConstants
 import com.example.final_project.data.remote.TourApiService
 import com.example.final_project.data.remote.dto.TourData
 import com.example.final_project.data.remote.dto.TourRequest
@@ -51,7 +52,7 @@ class TourRepository(
         } catch (e: HttpException) {
             AuthResult.Error(parseHttpError(e))
         } catch (e: IOException) {
-            AuthResult.Error("Network error. Check your connection and server URL.")
+            AuthResult.Error(ApiConstants.connectionErrorMessage())
         } catch (e: Exception) {
             AuthResult.Error(e.message ?: "Something went wrong")
         }
@@ -70,7 +71,7 @@ class TourRepository(
         } catch (e: HttpException) {
             AuthResult.Error(parseHttpError(e))
         } catch (e: IOException) {
-            AuthResult.Error("Network error. Check your connection and server URL.")
+            AuthResult.Error(ApiConstants.connectionErrorMessage())
         } catch (e: Exception) {
             AuthResult.Error(e.message ?: "Something went wrong")
         }
@@ -89,7 +90,7 @@ class TourRepository(
         } catch (e: HttpException) {
             AuthResult.Error(parseHttpError(e))
         } catch (e: IOException) {
-            AuthResult.Error("Network error. Check your connection and server URL.")
+            AuthResult.Error(ApiConstants.connectionErrorMessage())
         } catch (e: Exception) {
             AuthResult.Error(e.message ?: "Something went wrong")
         }

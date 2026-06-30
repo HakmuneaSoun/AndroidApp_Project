@@ -2,6 +2,7 @@ package com.example.final_project.data.repository
 
 import com.example.final_project.data.local.SessionManager
 import com.example.final_project.data.remote.AdminApiService
+import com.example.final_project.data.remote.ApiConstants
 import com.example.final_project.data.remote.dto.DashboardData
 import retrofit2.HttpException
 import java.io.IOException
@@ -23,7 +24,7 @@ class AdminDashboardRepository(
         } catch (e: HttpException) {
             AuthResult.Error(parseHttpError(e))
         } catch (e: IOException) {
-            AuthResult.Error("Network error. Check your connection and server URL.")
+            AuthResult.Error(ApiConstants.connectionErrorMessage())
         } catch (e: Exception) {
             AuthResult.Error(e.message ?: "Something went wrong")
         }

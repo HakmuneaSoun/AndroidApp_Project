@@ -203,6 +203,9 @@ fun AppNavigation(navState: NavigationState = rememberNavigationState()) {
         }
 
         Screen.Home -> {
+            LaunchedEffect(Unit) {
+                toursViewModel.loadTours()
+            }
             HomeScreen(
                 destinations = toursState.tours.filter { it.isActive },
                 isLoading = toursState.isLoading,

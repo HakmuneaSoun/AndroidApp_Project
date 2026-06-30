@@ -2,7 +2,10 @@ package com.example.final_project.data.remote
 
 import android.content.Context
 import com.example.final_project.data.local.SessionManager
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
+import okhttp3.Request
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
@@ -17,6 +20,8 @@ object RetrofitClient {
         sessionManager = SessionManager(context.applicationContext)
     }
 
+    fun getSessionManager(): SessionManager = requireSessionManager()
+
     private fun requireSessionManager(): SessionManager {
         check(::sessionManager.isInitialized) {
             "RetrofitClient.init(context) must be called before using APIs"
@@ -25,17 +30,30 @@ object RetrofitClient {
     }
 
     private val loggingInterceptor = HttpLoggingInterceptor().apply {
-        level = HttpLoggingInterceptor.Level.BODY
+        level = HttpLoggingInterceptor.Level.BASIC
     }
 
     private val okHttpClient: OkHttpClient by lazy {
         OkHttpClient.Builder()
+            .addInterceptor(RetryInterceptor())
             .addInterceptor(AuthInterceptor(requireSessionManager()))
             .addInterceptor(loggingInterceptor)
-            .connectTimeout(30, TimeUnit.SECONDS)
-            .readTimeout(30, TimeUnit.SECONDS)
-            .writeTimeout(30, TimeUnit.SECONDS)
+            .connectTimeout(90, TimeUnit.SECONDS)
+            .readTimeout(60, TimeUnit.SECONDS)
+            .writeTimeout(60, TimeUnit.SECONDS)
             .build()
+    }
+
+    suspend fun warmupServer() = withContext(Dispatchers.IO) {
+        try {
+            val request = Request.Builder()
+                .url("${ApiConstants.BASE_URL}api/tours")
+                .get()
+                .build()
+            okHttpClient.newCall(request).execute().use { it.close() }
+        } catch (_: Exception) {
+            // Login and other screens will retry automatically.
+        }
     }
 
     private val retrofit: Retrofit by lazy {

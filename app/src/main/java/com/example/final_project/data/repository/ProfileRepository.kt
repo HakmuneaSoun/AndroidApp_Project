@@ -3,6 +3,7 @@ package com.example.final_project.data.repository
 import android.content.Context
 import android.net.Uri
 import com.example.final_project.data.local.SessionManager
+import com.example.final_project.data.remote.ApiConstants
 import com.example.final_project.data.remote.ProfileApiService
 import com.example.final_project.data.remote.dto.UpdateProfileRequest
 import com.example.final_project.data.remote.dto.UserProfileData
@@ -34,7 +35,7 @@ class ProfileRepository(
         } catch (e: HttpException) {
             AuthResult.Error(parseHttpError(e))
         } catch (e: IOException) {
-            AuthResult.Error("Network error. Check your internet connection.")
+            AuthResult.Error(ApiConstants.connectionErrorMessage())
         } catch (e: Exception) {
             AuthResult.Error(e.message ?: "Something went wrong")
         }
@@ -67,7 +68,7 @@ class ProfileRepository(
         } catch (e: HttpException) {
             AuthResult.Error(parseHttpError(e))
         } catch (e: IOException) {
-            AuthResult.Error("Network error. Check your internet connection.")
+            AuthResult.Error(ApiConstants.connectionErrorMessage())
         } catch (e: Exception) {
             AuthResult.Error(e.message ?: "Something went wrong")
         }
@@ -90,7 +91,7 @@ class ProfileRepository(
         } catch (e: HttpException) {
             AuthResult.Error(parseHttpError(e))
         } catch (e: IOException) {
-            AuthResult.Error("Network error. Check your internet connection.")
+            AuthResult.Error(ApiConstants.connectionErrorMessage())
         } catch (e: Exception) {
             AuthResult.Error(e.message ?: "Something went wrong")
         }

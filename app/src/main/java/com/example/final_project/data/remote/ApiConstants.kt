@@ -2,6 +2,7 @@ package com.example.final_project.data.remote
 
 object ApiConstants {
 
+    // Public cloud server — works on any network; no PC or local.properties setup needed.
     const val BASE_URL = "https://tour-recomendation-backend.onrender.com/"
 
     fun resolveMediaUrl(url: String?): String? {
@@ -15,5 +16,5 @@ object ApiConstants {
     }
 
     fun connectionErrorMessage(): String =
-        "Cannot reach server. Check your internet connection."
+        "Cannot reach server. Check your internet connection and try again in a moment."
 }

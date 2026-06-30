@@ -24,6 +24,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.final_project.data.remote.RetrofitClient
 import kotlinx.coroutines.delay
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
@@ -95,7 +96,8 @@ fun SplashScreen(onTimeout: () -> Unit) {
     // ── Lifecycle ─────────────────────────────────────────────────────────────
     LaunchedEffect(Unit) {
         started = true
-        delay(3000)
+        RetrofitClient.warmupServer()
+        delay(2500)
         onTimeout()
     }
 

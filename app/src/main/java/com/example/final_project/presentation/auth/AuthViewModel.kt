@@ -8,7 +8,6 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import com.example.final_project.data.local.SessionManager
 import com.example.final_project.data.remote.RetrofitClient
 import com.example.final_project.data.repository.AuthRepository
 import com.example.final_project.data.repository.AuthResult
@@ -25,7 +24,7 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
 
     private val repository = AuthRepository(
         api = RetrofitClient.authApi,
-        sessionManager = SessionManager(application)
+        sessionManager = RetrofitClient.getSessionManager()
     )
 
     var uiState by mutableStateOf(AuthUiState())
