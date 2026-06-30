@@ -86,6 +86,11 @@ class ReviewsViewModel(application: Application) : AndroidViewModel(application)
     fun clearMessages() {
         uiState = uiState.copy(errorMessage = null, submitSuccess = false)
     }
+
+    fun reset() {
+        loadedTourId = null
+        uiState = ReviewsUiState()
+    }
 }
 
 class ReviewsViewModelFactory(

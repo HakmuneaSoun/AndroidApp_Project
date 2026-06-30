@@ -68,6 +68,19 @@ class AuthRepository(
         }
     }
 
+    suspend fun logout() {
+        try {
+            sessionManager.hydrateToken()
+            if (!sessionManager.getToken().isNullOrBlank()) {
+                api.logout()
+            }
+        } catch (_: Exception) {
+            // Always clear local session even if the server call fails.
+        } finally {
+            sessionManager.clearSession()
+        }
+    }
+
     private fun formatErrorMessage(message: String?, errors: Map<String, String>?): String {
         if (!errors.isNullOrEmpty()) {
             return errors.values.joinToString("\n")

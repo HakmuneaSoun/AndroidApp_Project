@@ -103,6 +103,15 @@ class NavigationState {
             else -> Screen.Login
         }
     }
+
+    fun resetForLogout() {
+        currentScreen = Screen.Login
+        selectedDestinationId = ""
+        detailReturnScreen = Screen.Home
+        notificationsReturnScreen = Screen.Home
+        bookingDraft = null
+        selectedPaymentMethod = PaymentMethod.VisaMasterCard
+    }
 }
 
 @Composable
@@ -128,6 +137,13 @@ fun AppNavigation(navState: NavigationState = rememberNavigationState()) {
     val toursState = toursViewModel.uiState
     val bookingFlowState = bookingViewModel.uiState
     val userNotifications = remember { mockUserNotifications.toMutableStateList() }
+
+    fun handleLogout() {
+        bookingViewModel.resetFlow()
+        favoritesViewModel.reset()
+        reviewsViewModel.reset()
+        navState.resetForLogout()
+    }
 
     fun navigateToTab(tab: BottomNavItem) {
         navState.navigateTo(
@@ -165,7 +181,7 @@ fun AppNavigation(navState: NavigationState = rememberNavigationState()) {
 
         Screen.AdminDashboard -> {
             AdminDashboardScreen(
-                onNavigateBack = { navState.navigateTo(Screen.Login) }
+                onNavigateBack = { handleLogout() }
             )
         }
 
@@ -304,7 +320,7 @@ fun AppNavigation(navState: NavigationState = rememberNavigationState()) {
 
         Screen.Profile -> {
             ProfileScreen(
-                onLogout = { navState.navigateTo(Screen.Login) },
+                onLogout = { handleLogout() },
                 onNavigateBack = { navigateToTab(BottomNavItem.Home) },
                 onNotificationsClick = { navState.openNotifications() },
                 selectedTab = selectedTabForScreen(),

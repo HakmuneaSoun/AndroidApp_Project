@@ -15,7 +15,7 @@ data class UserProfileData(
 )
 
 data class UpdateProfileRequest(
-    val fullName: String,
+    val name: String,
     val phone: String?,
     @SerializedName("avatar_url") val avatarUrl: String?
 )

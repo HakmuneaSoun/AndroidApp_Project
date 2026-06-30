@@ -2,6 +2,7 @@ package com.example.final_project.presentation.profile
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -62,9 +63,9 @@ fun EditProfileScreen(
         }
     }
 
-    LaunchedEffect(uiState.successMessage) {
+    LaunchedEffect(uiState.successMessage, uiState.isSaving) {
         if (uiState.successMessage != null && uiState.profile != null && !uiState.isSaving) {
-            onSaved(uiState.profile)
+            onSaved(uiState.profile!!)
             viewModel.clearMessages()
         }
     }
@@ -80,19 +81,6 @@ fun EditProfileScreen(
 
     Scaffold(
         containerColor = backgroundColor,
-        topBar = {
-            TopAppBar(
-                title = {
-                    Text("Edit Profile", fontWeight = FontWeight.Bold, color = TextPrimary)
-                },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = backgroundColor)
-            )
-        }
     ) { padding ->
         if (uiState.isLoading && profile == null) {
             Box(
@@ -136,76 +124,76 @@ fun EditProfileScreen(
                         Box(
                             modifier = Modifier
                                 .size(120.dp)
-                                .shadow(8.dp, CircleShape)
-                                .clip(CircleShape)
                                 .clickable(enabled = !uiState.isUploading) {
                                     imagePicker.launch("image/*")
-                                },
-                            contentAlignment = Alignment.Center
+                                }
                         ) {
-                            val avatarUrl = ApiConstants.resolveMediaUrl(uiState.pendingAvatarUrl)
-                            if (!avatarUrl.isNullOrBlank()) {
-                                AsyncImage(
-                                    model = avatarUrl,
-                                    contentDescription = "Profile photo",
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentScale = ContentScale.Crop
-                                )
-                            } else {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .background(Brush.linearGradient(listOf(primaryColor, AccentDark))),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(
-                                        text = profileInitials(fullName.ifBlank { profile?.name }),
-                                        fontSize = 40.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = Color.White
-                                    )
-                                }
-                            }
-
-                            if (uiState.isUploading) {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .background(Color.Black.copy(alpha = 0.4f)),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    CircularProgressIndicator(
-                                        color = Color.White,
-                                        modifier = Modifier.size(28.dp),
-                                        strokeWidth = 2.dp
-                                    )
-                                }
-                            }
-
                             Box(
                                 modifier = Modifier
-                                    .align(Alignment.BottomEnd)
-                                    .size(36.dp)
-                                    .clip(CircleShape)
-                                    .background(primaryColor)
-                                    .border(2.dp, Color.White, CircleShape),
+                                    .fillMaxSize()
+                                    .shadow(8.dp, CircleShape)
+                                    .clip(CircleShape),
                                 contentAlignment = Alignment.Center
                             ) {
-                                Icon(
-                                    Icons.Default.PhotoCamera,
-                                    contentDescription = "Change photo",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(18.dp)
-                                )
+                                val avatarUrl = ApiConstants.resolveMediaUrl(uiState.pendingAvatarUrl)
+                                if (!avatarUrl.isNullOrBlank()) {
+                                    AsyncImage(
+                                        model = avatarUrl,
+                                        contentDescription = "Profile photo",
+                                        modifier = Modifier.fillMaxSize(),
+                                        contentScale = ContentScale.Crop
+                                    )
+                                } else {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .background(Brush.linearGradient(listOf(primaryColor, AccentDark))),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = profileInitials(fullName.ifBlank { profile?.name }),
+                                            fontSize = 40.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color.White
+                                        )
+                                    }
+                                }
+
+                                if (uiState.isUploading) {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .background(Color.Black.copy(alpha = 0.4f)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        CircularProgressIndicator(
+                                            color = Color.White,
+                                            modifier = Modifier.size(28.dp),
+                                            strokeWidth = 2.dp
+                                        )
+                                    }
+                                }
+                            }
+
+                            Surface(
+                                modifier = Modifier
+                                    .align(Alignment.BottomEnd)
+                                    .size(36.dp),
+                                shape = CircleShape,
+                                color = primaryColor,
+                                border = BorderStroke(2.dp, Color.White),
+                                shadowElevation = 4.dp
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        Icons.Default.PhotoCamera,
+                                        contentDescription = "Change photo",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
                             }
                         }
-
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            "Tap to upload avatar",
-                            fontSize = 11.sp,
-                            color = TextSecondary
-                        )
                     }
                 }
             }

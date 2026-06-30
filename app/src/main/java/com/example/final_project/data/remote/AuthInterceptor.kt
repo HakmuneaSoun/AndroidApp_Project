@@ -9,14 +9,18 @@ class AuthInterceptor(
 ) : Interceptor {
 
     override fun intercept(chain: Interceptor.Chain): Response {
+        val request = chain.request()
+        val path = request.url.encodedPath
+        val isPublicAuth = path.endsWith("/api/auth/login") || path.endsWith("/api/auth/register")
+
         val token = sessionManager.getToken()
-        val request = if (!token.isNullOrBlank()) {
-            chain.request().newBuilder()
+        val authedRequest = if (!isPublicAuth && !token.isNullOrBlank()) {
+            request.newBuilder()
                 .addHeader("Authorization", "Bearer $token")
                 .build()
         } else {
-            chain.request()
+            request
         }
-        return chain.proceed(request)
+        return chain.proceed(authedRequest)
     }
 }

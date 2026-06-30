@@ -6,18 +6,6 @@ plugins {
     alias(libs.plugins.kotlin.android)
 }
 
-import java.util.Properties
-
-val localProperties = Properties().apply {
-    val file = rootProject.file("local.properties")
-    if (file.exists()) {
-        file.inputStream().use { load(it) }
-    }
-}
-
-// Emulator: 10.0.2.2 | Physical phone: your PC LAN IP, e.g. 192.168.1.10
-val devServerHost = localProperties.getProperty("DEV_SERVER_HOST", "172.20.10.2")
-
 android {
     namespace = "com.example.final_project"
     compileSdk = 35
@@ -28,8 +16,6 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "1.0"
-
-        buildConfigField("String", "DEV_SERVER_HOST", "\"$devServerHost\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -49,7 +35,6 @@ android {
     }
     buildFeatures {
         compose = true
-        buildConfig = true
     }
     composeOptions {
         kotlinCompilerExtensionVersion = "1.5.14"

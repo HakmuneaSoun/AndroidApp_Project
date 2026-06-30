@@ -12,6 +12,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.final_project.data.local.SessionManager
 import com.example.final_project.data.remote.RetrofitClient
 import com.example.final_project.data.remote.dto.UserProfileData
+import com.example.final_project.data.repository.AuthRepository
 import com.example.final_project.data.repository.AuthResult
 import com.example.final_project.data.repository.ProfileRepository
 import kotlinx.coroutines.launch
@@ -29,8 +30,12 @@ data class ProfileUiState(
 class ProfileViewModel(application: Application) : AndroidViewModel(application) {
 
     private val repository = ProfileRepository(
-        authApi = RetrofitClient.authApi,
-        fileApi = RetrofitClient.fileApi,
+        profileApi = RetrofitClient.profileApi,
+        sessionManager = SessionManager(application)
+    )
+
+    private val authRepository = AuthRepository(
+        api = RetrofitClient.authApi,
         sessionManager = SessionManager(application)
     )
 
@@ -61,13 +66,13 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
 
     fun uploadAvatar(uri: Uri) {
         viewModelScope.launch {
-            uiState = uiState.copy(isUploading = true, errorMessage = null, successMessage = null)
+            uiState = uiState.copy(isUploading = true, errorMessage = null)
             when (val result = repository.uploadAvatar(getApplication(), uri)) {
                 is AuthResult.Success -> {
                     uiState = uiState.copy(
                         isUploading = false,
-                        pendingAvatarUrl = result.data,
-                        successMessage = result.message
+                        profile = result.data,
+                        pendingAvatarUrl = result.data.avatarUrl
                     )
                 }
                 is AuthResult.Error -> {
@@ -82,7 +87,7 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
             uiState = uiState.copy(isSaving = true, errorMessage = null, successMessage = null)
             when (
                 val result = repository.updateProfile(
-                    fullName = fullName,
+                    name = fullName,
                     phone = phone,
                     avatarUrl = uiState.pendingAvatarUrl
                 )
@@ -104,7 +109,8 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
 
     fun logout(onComplete: () -> Unit) {
         viewModelScope.launch {
-            repository.logout()
+            authRepository.logout()
+            uiState = ProfileUiState()
             onComplete()
         }
     }

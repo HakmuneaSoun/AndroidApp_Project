@@ -31,7 +31,6 @@ data class AdminMenuItem(
     val screen: AdminScreen?,
     val icon: ImageVector,
     val title: String,
-    val badge: Int? = null,
     val isLogout: Boolean = false
 )
 
@@ -46,12 +45,11 @@ fun AdminDrawerContent(
 ) {
     val menuItems = listOf(
         AdminMenuItem(AdminScreen.Dashboard, Icons.Default.Dashboard, "Dashboard"),
-        AdminMenuItem(AdminScreen.Tours, Icons.Default.Explore, "Tours", 12),
-        AdminMenuItem(AdminScreen.Bookings, Icons.Default.Bookmark, "Booking", 5),
-        AdminMenuItem(AdminScreen.Users, Icons.Default.People, "Users", 156),
-        AdminMenuItem(AdminScreen.Categories, Icons.Default.Category, "Categories", 6),
+        AdminMenuItem(AdminScreen.Tours, Icons.Default.Explore, "Tours"),
+        AdminMenuItem(AdminScreen.Bookings, Icons.Default.Bookmark, "Booking"),
+        AdminMenuItem(AdminScreen.Users, Icons.Default.People, "Users"),
+        AdminMenuItem(AdminScreen.Categories, Icons.Default.Category, "Categories"),
         AdminMenuItem(AdminScreen.Profile, Icons.Default.Person, "Profile"),
-//        AdminMenuItem(null, Icons.Default.Settings, "Setting"),
         AdminMenuItem(null, Icons.Default.Logout, "Logout", isLogout = true)
     )
 
@@ -175,20 +173,6 @@ private fun AdminDrawerItem(
             else AdminTheme.TextPrimary,
             modifier = Modifier.weight(1f)
         )
-        if (item.badge != null) {
-            Surface(
-                shape = RoundedCornerShape(10.dp),
-                color = if (isSelected) AdminTheme.Primary else AdminTheme.PrimaryLight
-            ) {
-                Text(
-                    text = item.badge.toString(),
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = if (isSelected) Color.White else AdminTheme.Primary,
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                )
-            }
-        }
         if (isSelected) {
             Spacer(modifier = Modifier.width(6.dp))
             Box(

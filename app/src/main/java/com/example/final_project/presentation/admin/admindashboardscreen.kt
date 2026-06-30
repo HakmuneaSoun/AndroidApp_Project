@@ -58,8 +58,7 @@ import kotlinx.coroutines.launch
 
 data class MenuItem(
     val icon: ImageVector,
-    val title: String,
-    val badge: Int? = null
+    val title: String
 )
 
 data class AdminProfile(
@@ -388,22 +387,6 @@ fun MenuItemRow(
             color = if (isSelected) Color(0xFF2196F3) else Color.Black
         )
         Spacer(modifier = Modifier.weight(1f))
-        if (item.badge != null) {
-            Surface(
-                shape = CircleShape,
-                color = if (isSelected) Color(0xFF2196F3) else Color(0xFFE3F2FD),
-                modifier = Modifier.size(22.dp)
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Text(
-                        text = item.badge.toString(),
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = if (isSelected) Color.White else Color(0xFF2196F3)
-                    )
-                }
-            }
-        }
         if (isSelected) {
             Spacer(modifier = Modifier.width(8.dp))
             Surface(

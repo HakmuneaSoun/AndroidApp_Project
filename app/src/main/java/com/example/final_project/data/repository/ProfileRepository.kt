@@ -3,10 +3,8 @@ package com.example.final_project.data.repository
 import android.content.Context
 import android.net.Uri
 import com.example.final_project.data.local.SessionManager
-import com.example.final_project.data.remote.AuthApiService
-import com.example.final_project.data.remote.FileApiService
+import com.example.final_project.data.remote.ProfileApiService
 import com.example.final_project.data.remote.dto.UpdateProfileRequest
-import com.example.final_project.data.remote.dto.UploadType
 import com.example.final_project.data.remote.dto.UserProfileData
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MultipartBody
@@ -15,15 +13,14 @@ import retrofit2.HttpException
 import java.io.IOException
 
 class ProfileRepository(
-    private val authApi: AuthApiService,
-    private val fileApi: FileApiService,
+    private val profileApi: ProfileApiService,
     private val sessionManager: SessionManager
 ) {
 
     suspend fun getProfile(): AuthResult<UserProfileData> {
         return try {
             sessionManager.hydrateToken()
-            val response = authApi.getMe()
+            val response = profileApi.getProfile()
             if (response.success && response.data != null) {
                 sessionManager.saveProfile(
                     name = response.data.name,
@@ -37,22 +34,22 @@ class ProfileRepository(
         } catch (e: HttpException) {
             AuthResult.Error(parseHttpError(e))
         } catch (e: IOException) {
-            AuthResult.Error("Network error. Check your connection and server URL.")
+            AuthResult.Error("Network error. Check your internet connection.")
         } catch (e: Exception) {
             AuthResult.Error(e.message ?: "Something went wrong")
         }
     }
 
     suspend fun updateProfile(
-        fullName: String,
+        name: String,
         phone: String?,
         avatarUrl: String?
     ): AuthResult<UserProfileData> {
         return try {
             sessionManager.hydrateToken()
-            val response = authApi.updateProfile(
+            val response = profileApi.updateProfile(
                 UpdateProfileRequest(
-                    fullName = fullName.trim(),
+                    name = name.trim(),
                     phone = phone?.trim()?.ifBlank { null },
                     avatarUrl = avatarUrl?.ifBlank { null }
                 )
@@ -70,33 +67,33 @@ class ProfileRepository(
         } catch (e: HttpException) {
             AuthResult.Error(parseHttpError(e))
         } catch (e: IOException) {
-            AuthResult.Error("Network error. Check your connection and server URL.")
+            AuthResult.Error("Network error. Check your internet connection.")
         } catch (e: Exception) {
             AuthResult.Error(e.message ?: "Something went wrong")
         }
     }
 
-    suspend fun uploadAvatar(context: Context, uri: Uri): AuthResult<String> {
+    suspend fun uploadAvatar(context: Context, uri: Uri): AuthResult<UserProfileData> {
         return try {
             sessionManager.hydrateToken()
-            val part = uri.toMultipartPart(context)
-            val response = fileApi.uploadFile(UploadType.AVATAR, part)
+            val response = profileApi.uploadAvatar(uri.toMultipartPart(context))
             if (response.success && response.data != null) {
-                AuthResult.Success(response.data.imageUrl, response.message ?: "Image uploaded")
+                sessionManager.saveProfile(
+                    name = response.data.name,
+                    phone = response.data.phone,
+                    avatarUrl = response.data.avatarUrl
+                )
+                AuthResult.Success(response.data, response.message ?: "Avatar uploaded")
             } else {
                 AuthResult.Error(formatErrorMessage(response.message, response.errors))
             }
         } catch (e: HttpException) {
             AuthResult.Error(parseHttpError(e))
         } catch (e: IOException) {
-            AuthResult.Error("Network error. Check your connection and server URL.")
+            AuthResult.Error("Network error. Check your internet connection.")
         } catch (e: Exception) {
             AuthResult.Error(e.message ?: "Something went wrong")
         }
-    }
-
-    suspend fun logout() {
-        sessionManager.clearSession()
     }
 
     private fun Uri.toMultipartPart(context: Context): MultipartBody.Part {

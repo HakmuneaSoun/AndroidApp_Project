@@ -127,6 +127,10 @@ class FavoritesViewModel(application: Application) : AndroidViewModel(applicatio
     fun clearError() {
         uiState = uiState.copy(errorMessage = null)
     }
+
+    fun reset() {
+        uiState = FavoritesUiState()
+    }
 }
 
 class FavoritesViewModelFactory(
